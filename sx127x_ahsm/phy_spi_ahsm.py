@@ -74,7 +74,7 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.handled(me, event)
 
         elif sig == farc.Signal._DEFAULT_CFG:
-            me.sx127x.set_config(phy_cfg.sx127x_cfg)
+            me.sx127x.set_config(phy_cfg.sx127x_stngs)
             me.sx127x.set_pwr_cfg(boost=True)
             me.postFIFO(farc.Event(farc.Signal._ALWAYS, None))
             return me.handled(me, event)

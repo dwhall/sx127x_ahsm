@@ -1,8 +1,4 @@
-from . import phy_sx127x_cfg
-
-# Transmit and receive center frequencies
-tx_freq = 432.550e6
-rx_freq = 432.550e6
+from . import phy_sx127x_stngs
 
 # Transmit Margin:
 # A transmit begins this amount of time after the beginning of a Tslot
@@ -10,7 +6,7 @@ rx_freq = 432.550e6
 tx_margin = 0.005 # secs
 
 # Modem configuration
-sx127x_cfg = phy_sx127x_cfg.SX127xConfig(
+sx127x_stngs = phy_sx127x_stngs.SX127xSettings(
     bandwidth=250000,
     code_rate="4/6",
     implct_hdr_mode=False,
@@ -22,10 +18,6 @@ sx127x_cfg = phy_sx127x_cfg.SX127xConfig(
     en_ldr=False,
     agc_auto=True,
     sync_word=0x12)
-
-# RaspberryPi UART (to GPS) configuration.
-uart_port = "/dev/serial0"
-uart_baud = 9600
 
 # RaspberryPi GPIO configuration.
 # This configuration is for the Dragino LoRa GPS Hat v1.3

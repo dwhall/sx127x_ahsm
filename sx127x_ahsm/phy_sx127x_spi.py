@@ -11,7 +11,7 @@ try:
 except:
     from . import mock_spidev as spidev
 
-from . import phy_sx127x_cfg
+from . import phy_sx127x_stngs
 
 
 SPI_CLK_MAX = 20000000
@@ -348,7 +348,7 @@ class SX127xSpi(object):
     def set_config(self, cfg):
         """Writes configuration values to the appropriate registers
         """
-        assert isinstance(cfg, phy_sx127x_cfg.SX127xConfig)
+        assert isinstance(cfg, phy_sx127x_stngs.SX127xSettings)
 
         # Save cfg
         self.cfg = cfg
