@@ -2,8 +2,9 @@
 """
 Copyright 2017 Dean Hall.  See LICENSE for details.
 
-Physical Layer State Machine for SPI operations to the SX127x device
+Physical Layer State Machine for SX127x device
 - models SX127x device operation
+- SX127x device control via SPI bus
 - establishes Transmit and Receive sequences
 - responds to a handful of events (expected from Layer 2 (MAC))
 """
@@ -17,6 +18,10 @@ from . import phy_cfg
 from . import phy_sx127x_spi
 
 class SX127xSpiAhsm(farc.Ahsm):
+    # Transmit Margin:
+    # A transmit begins this amount of time after the beginning of a Tslot
+    # to allow other nodes time to enable their receiver
+    TX_MARGIN = 0.005 # secs
 
     @farc.Hsm.state
     def initial(me, event):
@@ -249,7 +254,7 @@ class SX127xSpiAhsm(farc.Ahsm):
             # Calculate precise sleep time and apply a TX margin
             # to allow receivers time to get ready
             tiny_sleep = me.tx_time - farc.Framework._event_loop.time()
-            tiny_sleep += phy_cfg.tx_margin
+            tiny_sleep += SX127xSpiAhsm.TX_MARGIN
 
             # If TX time has passed, don't sleep
             # Else use sleep to get ~1ms precision
