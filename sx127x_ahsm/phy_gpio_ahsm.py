@@ -3,9 +3,10 @@
 Copyright 2017 Dean Hall.  See LICENSE for details.
 
 Physical Layer State Machine for GPIO operations on the RasPi device
-- detects DIO* pin changes from the SX127x device
-- detects PPS pin changes from the GPS device
+- detects GPIO input pin changes
 - publishes events (with timestamp) when these pin changes occur
+
+NOTE: Uses GPIO.BCM pin numbering.
 """
 
 
