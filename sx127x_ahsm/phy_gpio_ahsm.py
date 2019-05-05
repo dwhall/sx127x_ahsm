@@ -23,7 +23,7 @@ except:
 # So in the following GPIO handler, we publish a unique event for each GPIO.
 # The separate thread will publish the event and exit quickly
 # back to the main thread; the event will be processed there.
-def gpio_input_handler(sig):
+def _gpio_input_handler(sig):
     """Emits the given signal upon a pin change.
     The event's value is the current time.
     """
@@ -35,25 +35,25 @@ def gpio_input_handler(sig):
 class GpioAhsm(farc.Ahsm):
 
     @farc.Hsm.state
-    def initial(me, event):
-        """Pseudostate: GpioAhsm:initial
+    def _initial(me, event):
+        """Pseudostate: GpioAhsm:_initial
         """
         GPIO.setmode(GPIO.BCM)
 
         farc.Signal.register("_ALWAYS")
-        return me.tran(me, GpioAhsm.running)
+        return me.tran(me, GpioAhsm._running)
 
 
     @farc.Hsm.state
-    def running(me, event):
-        """State: GpioAhsm:running
+    def _running(me, event):
+        """State: GpioAhsm:_running
         """
         sig = event.signal
         if sig == farc.Signal.ENTRY:
             return me.handled(me, event)
 
         elif sig == farc.Signal.SIGTERM:
-            return me.tran(me, me.exiting)
+            return me.tran(me, me._exiting)
 
         elif sig == farc.Signal.EXIT:
             GPIO.cleanup()
@@ -63,8 +63,8 @@ class GpioAhsm(farc.Ahsm):
 
 
     @farc.Hsm.state
-    def exiting(me, event):
-        """State: GpioAhsm:exiting
+    def _exiting(me, event):
+        """State: GpioAhsm:_exiting
         """
         sig = event.signal
         if sig == farc.Signal.ENTRY:
@@ -78,7 +78,7 @@ class GpioAhsm(farc.Ahsm):
         """
         sig_num = farc.Signal.register(sig_name)
         GPIO.setup(pin_nmbr, GPIO.IN)
-        GPIO.add_event_detect(pin_nmbr, edge=pin_edge, callback=lambda x: gpio_input_handler(sig_num))
+        GPIO.add_event_detect(pin_nmbr, edge=pin_edge, callback=lambda x: _gpio_input_handler(sig_num))
 
 
 #    def register_pin_out(self, pin_nmbr, pin_initial):
