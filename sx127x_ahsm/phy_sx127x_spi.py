@@ -99,14 +99,6 @@ class SX127xSpi(object):
         else:
             self.tx_base_ptr = 0
 
-        # TODO: the following two calls should be part of Radio Initializing
-
-        # Get current DIO map
-        self.get_dio()
-
-        # Get current frequency setting
-        self.get_freq()
-
 
     def __del__(self,):
         self.spi.close()
@@ -143,7 +135,7 @@ class SX127xSpi(object):
         return self.spi.xfer2(b)[1:]
 
 
-    def clear_status(self,):
+    def clear_counts(self,):
         """Clears the valid header count and valid packet count regs.
         """
         self._write(REG_RX_HDR_CNT, [0,0,0,0])
@@ -191,7 +183,7 @@ class SX127xSpi(object):
 
 
     def get_dio(self,):
-        """Reads the current DIO mapping from the device and 
+        """Reads the current DIO mapping from the device and
         stores it so we can modify individual DIOs later.
         Returns nothing.
         """
@@ -282,11 +274,9 @@ class SX127xSpi(object):
         rssi is an integer [dBm].
         snr is a float [dB].
         """
-        # Get length of data received
-        nbytes = self._read(REG_RX_NUM_BYTES)[0]
-
         # Get the index into the FIFO of where the pkt starts
-        pkt_start = self._read(REG_RX_CURRENT_ADDR)[0]
+        # and the length of the data received
+        pkt_start, _, _, nbytes = self._read(REG_RX_CURRENT_ADDR, 4)
 
         # Error checking (that pkt started at 0)
 #        if pkt_start != 0: "pkt_start was %d" % pkt_start # TODO: logging
@@ -332,16 +322,16 @@ class SX127xSpi(object):
 
 
     def check_chip_ver(self,):
-        """Returns True if the Semtech SX127x returns the proper value 
+        """Returns True if the Semtech SX127x returns the proper value
         from the Version register.  This proves the chip and the SPI bus
         are operating.
         """
         ver = self._read(REG_VERSION)[0]
         if ver == CHIP_VERSION:
-            logging.info("SPI to SX127x: PASS") # TODO: logging
+            logging.info("SPI to SX127x: PASS")
             return True
         else:
-            logging.info("SPI to SX127x: FAIL (version : %d)" % ver) # TODO: logging
+            logging.info("SPI to SX127x: FAIL (version : %d)" % ver)
             return False
 
 
@@ -451,7 +441,7 @@ class SX127xSpi(object):
         PA_CONFIG register (0x09).
         The use-pa-boost field selects the chip pin to output the RF signal.
         boost=True selects PA_BOOST as the output; whereas, False selects RFO.
-        Most modules connect PA_BOOST to the anetnna output, but a few use RFO.
+        Most modules connect PA_BOOST to the antenna output, but a few use RFO.
         https://github.com/PaulStoffregen/RadioHead/blob/master/RH_RF95.h#L649
         """
         r = pwr & 0xF | (max & 0x7) << 4

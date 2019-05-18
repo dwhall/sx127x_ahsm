@@ -70,7 +70,11 @@ class SX127xSpiAhsm(farc.Ahsm):
         sig = event.signal
         if sig == farc.Signal.ENTRY:
             if me.sx127x.check_chip_ver():
-                me.sx127x.get_regs()
+                # Gather current settings/reg vals from chip
+                # me.sx127x.get_regs()
+                me.sx127x.get_dio()
+                me.sx127x.get_freq()
+
                 me.sx127x.set_op_mode('stdby') # FIXME: TEMPORARY!
                 me.postFIFO(farc.Event(farc.Signal._DEFAULT_CFG, None))
             else:
