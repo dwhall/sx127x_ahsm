@@ -33,13 +33,15 @@ def _gpio_input_handler(sig):
 
 
 class GpioAhsm(farc.Ahsm):
+    def __init__(self,):
+        super().__init__()
+        GPIO.setmode(GPIO.BCM)
+
 
     @farc.Hsm.state
     def _initial(me, event):
         """Pseudostate: GpioAhsm:_initial
         """
-        GPIO.setmode(GPIO.BCM)
-
         farc.Signal.register("_ALWAYS")
         return me.tran(me, GpioAhsm._running)
 
