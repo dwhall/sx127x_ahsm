@@ -386,8 +386,12 @@ class SX127xSpi(object):
         where x is a value 0..5
         and <int> is an integer in the range 0..3
         """
-        # create an all zero sequence
-        dio_seq = [0,] * 6
+        # If DIO mapping has not been read from device
+        # create a mapping of all zeros
+        if not hasattr(self, "dio_mapping"):
+            self.dio_mapping = [0,] * 6
+
+        dio_seq = self.dio_mapping
 
         # put any kwargs into the sequence
         for k,v in dio_args.items():
