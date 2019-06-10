@@ -74,6 +74,9 @@ class SX127xSpiAhsm(farc.Ahsm):
                 # me.sx127x.get_regs()
                 me.sx127x.get_dio()
                 me.sx127x.get_freq()
+                mode = ms.sx127x.get_op_mode()
+                if mode == "sleep":
+                    return me.tran(me, SX127xSpiAhsm._sleeping)
 
                 me.sx127x.set_op_mode('stdby') # FIXME: TEMPORARY!
                 me.postFIFO(farc.Event(farc.Signal._DEFAULT_CFG, None))
@@ -83,6 +86,7 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.handled(me, event)
 
         elif sig == farc.Signal._DEFAULT_CFG:
+            # TODO: rename set_config()
             me.sx127x.set_config(phy_cfg.sx127x_stngs)
             me.sx127x.set_pwr_cfg(boost=True)
             me.postFIFO(farc.Event(farc.Signal._ALWAYS, None))
