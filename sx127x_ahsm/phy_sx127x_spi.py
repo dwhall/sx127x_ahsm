@@ -228,7 +228,7 @@ class SX127xSpi(object):
         return d
 
 
-    def get_mode(self,):
+    def get_op_mode(self,):
         """Gets the device mode field of the Op Mode register
         and returns a string representation of the mode.
         """
@@ -346,7 +346,7 @@ class SX127xSpi(object):
         self.bandwidth_idx = cfg.bandwidth_idx
 
         # Transition to sleep mode to write configuration
-        mode_bkup = self.get_mode()
+        mode_bkup = self.get_op_mode()
         if mode_bkup != 'sleep':
             self.set_op_mode(mode='sleep')
 
