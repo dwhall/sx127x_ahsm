@@ -74,11 +74,13 @@ class SX127xSpiAhsm(farc.Ahsm):
                 # me.sx127x.get_regs()
                 me.sx127x.get_dio()
                 me.sx127x.get_freq()
-                mode = ms.sx127x.get_op_mode()
-                if mode == "sleep":
-                    return me.tran(me, SX127xSpiAhsm._sleeping)
-
-                me.sx127x.set_op_mode('stdby') # FIXME: TEMPORARY!
+                mode = me.sx127x.get_op_mode()
+                # TODO: impl _sleeping
+                # if mode == "sleep":
+                #     return me.tran(me, SX127xSpiAhsm._sleeping)
+                # elif mode != "stdby":
+                #     me.sx127x.set_op_mode("stdby")
+                me.sx127x.set_op_mode("stdby") # TODO: TEMPORARY! remove this line when _sleeping is impl'd
                 me.postFIFO(farc.Event(farc.Signal._DEFAULT_CFG, None))
             else:
                 # TODO: no SX127x or no SPI
