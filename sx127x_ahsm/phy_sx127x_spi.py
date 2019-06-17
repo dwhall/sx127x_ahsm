@@ -24,11 +24,13 @@ CHIP_VERSION = 18
 # Set the MSb of the register address to write to it
 WRITE_BIT = 0x80
 
-# Radio register addresses
+# SX127x register addresses
 REG_FIFO = 0x00
 REG_OP_MODE = 0x01
 REG_CARRIER_FREQ = 0x06
 REG_PA_CFG = 0x09
+
+# LoRa modem register addresses
 REG_FIFO_PTR = 0x0D
 REG_FIFO_TX_BASE_PTR = 0x0E
 REG_FIFO_RX_BASE_PTR = 0x0F
@@ -37,10 +39,13 @@ REG_IRQ_MASK = 0x11
 REG_IRQ_FLAGS = 0x12
 REG_RX_NUM_BYTES = 0x13
 REG_RX_HDR_CNT = 0x14
+REG_RX_PKT_CNT = 0x16
+REG_LORA_MODEM_STATUS = 0x18
 REG_PKT_SNR = 0x19
-REG_PKT_RSSI = 0x1A
+REG_LATEST_RXD_PKT_RSSI = 0x1A
+REG_CURRENT_RSSI = 0x1B
 REG_MODEM_CFG_1 = 0x1D
-REG_MODEM_CFG_2 = 0x1E
+REG_MODEM_CFG_2 = 0x1E # (0x1F is LSB)
 REG_PREAMBLE_LEN = 0x20 # MSB (0x21 is LSB)
 REG_PAYLD_LEN = 0x22
 REG_PAYLD_MAX = 0x23
@@ -399,10 +404,13 @@ class SX127xSpi(object):
         return s
 
 
-    def set_config(self, cfg):
-        """Writes configuration values to the appropriate registers
+    def set_lora_settings(self, cfg):
+        """Applies settings values to the appropriate registers.
+        Caller should ensure AHSM is Idling or device is in stdby.
+        This method puts the device into sleep mode and returns it
+        to its current mode.
         """
-        assert isinstance(cfg, phy_sx127x_stngs.SX127xSettings)
+        assert isinstance(cfg, phy_sx127x_stngs.SX127xLoraSettings)
 
         # Save cfg
         self.cfg = cfg

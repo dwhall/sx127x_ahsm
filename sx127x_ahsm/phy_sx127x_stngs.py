@@ -9,15 +9,32 @@ import time
 
 
 class SX127xSettings(object):
+    """Base class for SX127x device settings.
+    LoRa and FSK settings are derived from this.
+    """
+    def __init__(self,):
+
+        # Settings are kept in this dict
+        self.stngs_dict = {}
+
+
+    def to_dict(self,):
+        """Returns the current settings as a Python dict.
+        """
+        return self.stngs_dict
+
+
+class SX127xLoraSettings(SX127xSettings):
     """Validates and stores SX127x device settings.
     """
     def __init__(self, **stngs_dict):
+        super().__init__()
+
+        # The names of LoRa modem settings handled by this container class
         settings = ("bandwidth", "code_rate", "implct_hdr_mode",
             "spread_factor", "tx_cont", "en_crc", "symbol_count",
             "preamble_len", "en_ldr", "agc_auto", "sync_word")
 
-        # All settings are kept in this dict
-        self.stngs_dict = {}
 
         # For each item given to the constructor,
         # check that it is an acceptable setting and

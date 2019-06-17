@@ -1,7 +1,8 @@
 from . import phy_sx127x_stngs
 
-# Modem configuration
-sx127x_stngs = phy_sx127x_stngs.SX127xSettings(
+# LoRa Modem configuration
+# (calculator results: ~9115 bps)
+sx127x_stngs = phy_sx127x_stngs.SX127xLoraSettings(
     bandwidth=250000,
     code_rate="4/6",
     implct_hdr_mode=False,

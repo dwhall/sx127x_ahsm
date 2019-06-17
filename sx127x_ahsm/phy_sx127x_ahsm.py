@@ -14,7 +14,7 @@ import time
 
 import farc
 
-from . import phy_cfg
+from . import phy_stngs
 from . import phy_sx127x_spi
 
 class SX127xSpiAhsm(farc.Ahsm):
@@ -75,7 +75,7 @@ class SX127xSpiAhsm(farc.Ahsm):
                 me.sx127x.get_dio()
                 me.sx127x.get_rf_freq()
                 mode = me.sx127x.get_op_mode()
-                # TODO: impl _sleeping
+                # TODO: impl state _idling:_sleeping ?
                 # if mode == "sleep":
                 #     return me.tran(me, SX127xSpiAhsm._sleeping)
                 # elif mode != "stdby":
@@ -88,8 +88,7 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.handled(me, event)
 
         elif sig == farc.Signal._DEFAULT_CFG:
-            # TODO: rename set_config()
-            me.sx127x.set_config(phy_cfg.sx127x_stngs)
+            me.sx127x.set_lora_settings(phy_stngs.sx127x_stngs)
             me.sx127x.set_pwr_cfg(boost=True)
             me.postFIFO(farc.Event(farc.Signal._ALWAYS, None))
             return me.handled(me, event)
@@ -111,6 +110,8 @@ class SX127xSpiAhsm(farc.Ahsm):
 
         elif sig == farc.Signal.PHY_SLEEP:
             return me.tran(me, me.sleeping)
+
+        elif sig == farc.Signal.SET_LORA:
 
         elif sig == farc.Signal.PHY_RECEIVE:
             me.rx_time = event.value[0]
