@@ -73,7 +73,7 @@ class SX127xSpiAhsm(farc.Ahsm):
                 # Gather current settings/reg vals from chip
                 # me.sx127x.get_regs()
                 me.sx127x.get_dio()
-                me.sx127x.get_freq()
+                me.sx127x.get_rf_freq()
                 mode = me.sx127x.get_op_mode()
                 # TODO: impl _sleeping
                 # if mode == "sleep":
@@ -139,7 +139,7 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.handled(me, event)
 
         elif sig == farc.Signal.PHY_STDBY:
-            me.sx127x.set_op_mode(mode="stdby")
+            me.sx127x.set_op_mode("stdby")
             return me.tran(me, me._idling)
 
         return me.super(me, me.top)
@@ -160,16 +160,16 @@ class SX127xSpiAhsm(farc.Ahsm):
         if sig == farc.Signal.ENTRY:
 
             # Enable only the RX interrupts (disable all others)
-            me.sx127x.disable_irqs()
-            me.sx127x.enable_irqs(phy_sx127x_spi.IRQFLAGS_RXTIMEOUT_MASK
+            me.sx127x.disable_lora_irqs()
+            me.sx127x.enable_lora_irqs(phy_sx127x_spi.IRQFLAGS_RXTIMEOUT_MASK
                 | phy_sx127x_spi.IRQFLAGS_RXDONE_MASK
                 | phy_sx127x_spi.IRQFLAGS_PAYLOADCRCERROR_MASK
                 | phy_sx127x_spi.IRQFLAGS_VALIDHEADER_MASK)
 
             # Prepare DIO0,1 to cause RxDone, RxTimeout, ValidHeader interrupts
             me.sx127x.set_dio_mapping(dio0=0, dio1=0, dio3=1)
-            me.sx127x.set_rx_fifo()
-            me.sx127x.set_rx_freq(me.rx_freq)
+            me.sx127x.set_lora_rx_fifo()
+            me.sx127x.set_lora_rx_freq(me.rx_freq)
 
             # Reminder pattern
             me.postFIFO(farc.Event(farc.Signal._ALWAYS, None))
@@ -195,17 +195,17 @@ class SX127xSpiAhsm(farc.Ahsm):
         if sig == farc.Signal.ENTRY:
             me.hdr_time = 0
             if me.rx_time < 0:
-                me.sx127x.set_op_mode(mode="rxcont")
+                me.sx127x.set_op_mode("rxcont")
             else:
-                me.sx127x.set_op_mode(mode="rxonce")
+                me.sx127x.set_op_mode("rxonce")
             return me.handled(me, event)
 
         elif sig == farc.Signal.PHY_DIO0: # RX_DONE
             # The ValidHeader time is closer to start of rx'd pkt
             # than RX_DONE's event time
             rxd_time = me.hdr_time
-            if me.sx127x.check_rx_flags():
-                payld, rssi, snr = me.sx127x.get_rx()
+            if me.sx127x.check_lora_rx_flags():
+                payld, rssi, snr = me.sx127x.get_lora_rxd()
                 pkt_data = (rxd_time, payld, rssi, snr)
                 farc.Framework.publish(farc.Event(farc.Signal.PHY_RXD_DATA, pkt_data))
             else:
@@ -215,12 +215,12 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.tran(me, SX127xSpiAhsm._idling)
 
         elif sig == farc.Signal.PHY_DIO1: # RX_TIMEOUT
-            me.sx127x.clear_irqs(phy_sx127x_spi.IRQFLAGS_RXTIMEOUT_MASK)
+            me.sx127x.clear_lora_irqs(phy_sx127x_spi.IRQFLAGS_RXTIMEOUT_MASK)
             return me.tran(me, SX127xSpiAhsm._idling)
 
         elif sig == farc.Signal.PHY_DIO3: # ValidHeader
             me.hdr_time = event.value
-            me.sx127x.clear_irqs(phy_sx127x_spi.IRQFLAGS_VALIDHEADER_MASK)
+            me.sx127x.clear_lora_irqs(phy_sx127x_spi.IRQFLAGS_VALIDHEADER_MASK)
             return me.handled(me, event)
 
         # If we are in Receiving but haven't received a header yet
@@ -228,7 +228,7 @@ class SX127xSpiAhsm(farc.Ahsm):
         # cancel the receive and do the Transmit
         elif sig == farc.Signal.PHY_TRANSMIT:
             if me.hdr_time == 0:
-                me.sx127x.set_op_mode(mode="stdby")
+                me.sx127x.set_op_mode("stdby")
                 me.tx_time = event.value[0]
                 me.tx_freq = event.value[1]
                 me.tx_data = event.value[2]
@@ -246,9 +246,9 @@ class SX127xSpiAhsm(farc.Ahsm):
         if sig == farc.Signal.ENTRY:
 
             # Enable only the TX interrupts (disable all others)
-            me.sx127x.disable_irqs()
-            me.sx127x.enable_irqs(phy_sx127x_spi.IRQFLAGS_TXDONE_MASK)
-            me.sx127x.clear_irqs(phy_sx127x_spi.IRQFLAGS_TXDONE_MASK)
+            me.sx127x.disable_lora_irqs()
+            me.sx127x.enable_lora_irqs(phy_sx127x_spi.IRQFLAGS_TXDONE_MASK)
+            me.sx127x.clear_lora_irqs(phy_sx127x_spi.IRQFLAGS_TXDONE_MASK)
 
             # Prepare DIO0 to cause TxDone interrupt
             me.sx127x.set_dio_mapping(dio0=1)
@@ -285,7 +285,7 @@ class SX127xSpiAhsm(farc.Ahsm):
         sig = event.signal
         if sig == farc.Signal.ENTRY:
             logging.info("tx             %f", farc.Framework._event_loop.time())
-            me.sx127x.set_op_mode(mode="tx")
+            me.sx127x.set_op_mode("tx")
             me.tm_evt.postIn(me, 1.0) # TODO: make time scale with datarate
             return me.handled(me, event)
 
@@ -294,7 +294,7 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.tran(me, SX127xSpiAhsm._idling)
 
         elif sig == farc.Signal._PHY_SPI_TMOUT: # software timeout
-            me.sx127x.set_op_mode(mode="stdby")
+            me.sx127x.set_op_mode("stdby")
             return me.tran(me, SX127xSpiAhsm._idling)
 
         return me.super(me, me._working)

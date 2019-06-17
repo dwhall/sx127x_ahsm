@@ -67,7 +67,7 @@ class SX127xSpi(object):
     """Offers methods that drive the SPI bus to control the Semtech SX127x.
     """
 
-    def __init__(self, spi_port=0, spi_cs=0, spi_mode=0, spi_clk_max=SPI_CLK_MAX, max_pkt_size=256):
+    def __init__(self, spi_port=0, spi_cs=0, spi_clk_max=SPI_CLK_MAX, max_pkt_size=256):
         """Initializes and configures the SPI peripheral
         with the given bus and chip select.
         The default values are 0,0 for (SPI0, CS0) which is the convention
@@ -84,25 +84,26 @@ class SX127xSpi(object):
         # Validate arguments, open and configure SPI peripheral
         assert spi_port in (0,1)
         assert spi_cs in (0,1)
-        assert spi_mode in range(0,4)
 
         self.spi = spidev.SpiDev()
         self.spi.open(spi_port, spi_cs)
         self.spi.max_speed_hz = spi_clk_max
-        self.spi.mode = spi_mode # phase=0 and polarity=0
+        self.spi.mode = 0 # phase=0 and polarity=0
 
         # Use max packet size to set FIFO base pointers
         assert max_pkt_size in (128,256), "Packet size must be full (256) or half (128)"
         self.max_pkt_size = max_pkt_size
         if max_pkt_size == 128:
-            self.tx_base_ptr = 0x80
+            self._tx_base_ptr = 0x80
         else:
-            self.tx_base_ptr = 0
+            self._tx_base_ptr = 0
 
 
     def __del__(self,):
         self.spi.close()
 
+
+## SPI helper methods
 
     def _read(self, reg_addr, nbytes=1):
         """Reads a byte (or more) from the register.
@@ -126,7 +127,7 @@ class SX127xSpi(object):
 
         # Build the list of bytes to write
         if type(data) == int:
-            data = data & 0xff
+            data &= 0xff
             b = [reg_addr, data]
         else:
             b = [reg_addr,]
@@ -135,51 +136,20 @@ class SX127xSpi(object):
         return self.spi.xfer2(b)[1:]
 
 
-    def clear_counts(self,):
-        """Clears the valid header count and valid packet count regs.
-        """
-        self._write(REG_RX_HDR_CNT, [0,0,0,0])
+## SX127x general methods
 
-
-    def clear_irqs(self, irq_bits=None):
-        """Clears interrupt flags.
-        If an argument is given, it is a byte with a bit set
-        for each IRQ flag to clear.
-        If no argument is given, all IRQ flags are cleared.
+    def check_chip_ver(self,):
+        """Returns True if the Semtech SX127x returns the proper value
+        from the Version register.  This proves the chip and the SPI bus
+        are operating.
         """
-        if irq_bits:
-            d = irq_bits
+        ver = self._read(REG_VERSION)[0]
+        if ver == CHIP_VERSION:
+            logging.info("SPI to SX127x: PASS")
+            return True
         else:
-            d = 0xFF
-        self._write(REG_IRQ_FLAGS, d)
-
-
-    def enable_irqs(self, irq_bits=None):
-        """Enables one or more IRQs.
-        If an argument is given, it is a byte
-        with a bit set for each IRQ to enable.
-        IRQs are enabled by writing a zero
-        to the bit in the mask register.
-        """
-        if irq_bits:
-            d = ~irq_bits
-        else:
-            d = 0x00
-        self._write(REG_IRQ_MASK, d)
-
-
-    def disable_irqs(self, irq_bits=None):
-        """Disables one or more IRQs.
-        If an argument is given, it is a byte
-        with a bit set for each IRQ to disable.
-        IRQs are disabled by writing a one
-        to the bit in the mask register.
-        """
-        if irq_bits:
-            d = irq_bits
-        else:
-            d = 0xFF
-        self._write(REG_IRQ_MASK, d)
+            logging.info("SPI to SX127x: FAIL (version : %d)" % ver)
+            return False
 
 
     def get_dio(self,):
@@ -188,7 +158,7 @@ class SX127xSpi(object):
         Returns nothing.
         """
         map1, map2 = self._read(REG_DIO_MAPPING1, 2)
-        dio = []
+        dio = bytearray()
         dio.append((map1 >> 6) & 0b11) # DIO0
         dio.append((map1 >> 4) & 0b11) # DIO1
         dio.append((map1 >> 2) & 0b11) # DIO2
@@ -196,36 +166,6 @@ class SX127xSpi(object):
         dio.append((map2 >> 6) & 0b11) # DIO4
         dio.append((map2 >> 4) & 0b11) # DIO5
         self.dio_mapping = dio
-
-
-    def get_fifo(self, offset=None, length=1):
-        """Returns list of bytes from the FIFO.
-        If the offset is given, data is read from there;
-        otherwise, data is read from the current FIFO pointer.
-        """
-        if offset is not None:
-            self.set_fifo_ptr(offset)
-
-        return self._read(REG_FIFO, length)
-
-
-    def get_freq(self,):
-        """Reads the frequency registers
-        and returns the calculated frequency.
-        WARNING: The frequency registers will contain an offset
-        if the radio's last operation was receive
-        (but some bandwidths have 0.0 offset).
-        """
-        hi,med,low = self._read(REG_CARRIER_FREQ, 3)
-        val = hi << 16 | med << 8 | low
-        return int(round(val * OSC_FREQ / 2**19))
-
-
-    def get_irqs(self,):
-        """Returns interrupt mask and flags registers.
-        """
-        d = self._read(REG_IRQ_MASK, 2)
-        return d
 
 
     def get_op_mode(self,):
@@ -244,140 +184,6 @@ class SX127xSpi(object):
         to gather the state of the SX127x.
         """
         pass
-
-
-    def check_rx_flags(self,):
-        """Checks post-receive status, clears rx-related IRQs.
-        Returns True if a valid packet was received, else False.
-        """
-        # Get the IRQ flags
-        flags = self._read(REG_IRQ_FLAGS)[0]
-
-        # Clear rx-related IRQ flags in the reg
-        flags &= ( IRQFLAGS_RXTIMEOUT_MASK
-                 | IRQFLAGS_RXDONE_MASK
-                 | IRQFLAGS_PAYLOADCRCERROR_MASK
-                 | IRQFLAGS_VALIDHEADER_MASK )
-        self._write(REG_IRQ_FLAGS, flags)
-
-        result = bool(flags & IRQFLAGS_RXDONE_MASK)
-        if flags & ( IRQFLAGS_RXTIMEOUT_MASK
-                   | IRQFLAGS_PAYLOADCRCERROR_MASK):
-            result = False
-        return result
-
-
-    def get_rx(self,):
-        """Assumes caller has already determined rx_is_valid().
-        Returns a tuple of: (payld, rssi, snr)
-        payld is a list of integers.
-        rssi is an integer [dBm].
-        snr is a float [dB].
-        """
-        # Get the index into the FIFO of where the pkt starts
-        # and the length of the data received
-        pkt_start, _, _, nbytes = self._read(REG_RX_CURRENT_ADDR, 4)
-
-        # Error checking (that pkt started at 0)
-#        if pkt_start != 0: "pkt_start was %d" % pkt_start # TODO: logging
-
-        # Read the payload
-        self._write(REG_FIFO_PTR, pkt_start)
-        payld = self._read(REG_FIFO, nbytes)
-
-        # Get the packet SNR and RSSI (2 consecutive regs)
-        # and calculate RSSI [dBm] and SNR [dB]
-        snr, rssi = self._read(REG_PKT_SNR, 2)
-        rssi = -157 + rssi
-        snr = snr / 4.0
-
-        return (payld, rssi, snr)
-
-
-    def get_status(self,):
-        """Gets status fields.
-        Returns a dict of status fields.
-        """
-        d = self._read(REG_RX_HDR_CNT, 5)
-        s = {}
-        s["rx_hdr_cnt"] = d[0] << 8 | d[1]
-        s["rx_pkt_cnt"] = d[2] << 8 | d[3]
-        s["rx_code_rate"] = d[4] >> 5
-        s["modem_clr"] = (d[4] & 0x10) != 0
-        s["hdr_info_valid"] = (d[4] & 0x08) != 0
-        s["rx_busy"] = (d[4] & 0x04) != 0
-        s["sig_sync"] = (d[4] & 0x01) != 0
-        s["sig_detected"] = (d[4] & 0x01) != 0
-        return s
-
-
-    def get_temperature(self,):
-        """Returns the temperature.
-        """
-        # TODO: See PDF p89 for procedure & calibration
-        # TODO: find way to safely [re]store FSK access to be able to read temp
-        t = self._read(REG_TEMP)
-        # TODO: convert t to degrees C
-        return t
-
-
-    def check_chip_ver(self,):
-        """Returns True if the Semtech SX127x returns the proper value
-        from the Version register.  This proves the chip and the SPI bus
-        are operating.
-        """
-        ver = self._read(REG_VERSION)[0]
-        if ver == CHIP_VERSION:
-            logging.info("SPI to SX127x: PASS")
-            return True
-        else:
-            logging.info("SPI to SX127x: FAIL (version : %d)" % ver)
-            return False
-
-
-    def set_config(self, cfg):
-        """Writes configuration values to the appropriate registers
-        """
-        assert isinstance(cfg, phy_sx127x_stngs.SX127xSettings)
-
-        # Save cfg
-        self.cfg = cfg
-
-        self.bandwidth_idx = cfg.bandwidth_idx
-
-        # Transition to sleep mode to write configuration
-        mode_bkup = self.get_op_mode()
-        if mode_bkup != 'sleep':
-            self.set_op_mode(mode='sleep')
-
-        # Concat bandwidth | code_rate | implicit header mode
-        reg_cfg1 = cfg.bandwidth_idx << 4 \
-            | cfg.code_rate_idx << 1 \
-            | int(cfg.implct_hdr_mode)
-        # Concat spread_factor | tx_cont | upper 2 bits of symbol count
-        reg_cfg2 = cfg.spread_factor_idx << 4 \
-            | int(cfg.tx_cont) << 3 \
-            | int(cfg.en_crc) << 2 \
-            | cfg.symbol_count >> 8
-        # Lower 8 bits of symbol count go in reg(0x1F)
-        reg_sym_to = cfg.symbol_count & 0xff
-        # Write 3 contiguous regs at once
-        self._write(REG_MODEM_CFG_1, [reg_cfg1, reg_cfg2, reg_sym_to])
-
-        # Write preamble register
-        reg_preamble_len = [cfg.preamble_len >> 8, cfg.preamble_len & 0xff]
-        self._write(REG_PREAMBLE_LEN, reg_preamble_len)
-
-        # Write Cfg3 reg
-        reg_cfg3 = int(cfg.en_ldr) << 3 | int(cfg.agc_auto) << 2
-        self._write(REG_MODEM_CFG_3, reg_cfg3)
-
-        # Write Sync word
-        self._write(REG_SYNC_WORD, cfg.sync_word)
-
-        # Restore previous operating mode
-        if mode_bkup != 'sleep':
-            self.set_op_mode(mode_bkup)
 
 
     def set_dio_mapping(self, **dio_args):
@@ -411,33 +217,53 @@ class SX127xSpi(object):
         self._write(REG_DIO_MAPPING1, [map_reg1, map_reg2])
 
 
-    def set_fifo(self, data, offset=None):
-        """Writes the data to the FIFO.
-        Data is either an int or a sequence of bytes
-        If the offset is given, data is written there;
-        otherwise, data is written at the current FIFO pointer.
+    def set_modem(self, modem):
+        """Enters sleep mode and sets the modem to use.
+        Modem is one of: "lora", "fsk" or "ook"
         """
-        if offset is not None:
-            self.set_fifo_ptr(offset)
+        assert modem in ("lora", "fsk", "ook")
 
-        self._write(REG_FIFO, data)
+        self.set_op_mode("sleep")
+        d = self._read(REG_OP_MODE)
+        d &= 0b00011111
+        if modem == "lora":
+            d |= 0b10000000
+        elif modem == "ook":
+            d |= 0b00100000
+        # if modem == "fsk" is three 0s (nothing to do)
+        self._write(REG_OP_MODE, d)
+        self.set_op_mode("stdby")
 
 
-    def set_fifo_ptr(self, offset=0):
-        """Sets the FIFO address pointer.
+## SX127x RF block methods
+
+    def get_rf_freq(self,):
+        """Reads the frequency registers
+        and returns the calculated frequency.
+        WARNING: The frequency registers will contain an offset
+        if the radio's last operation was receive
+        (but some bandwidths have 0.0 offset).
         """
-        assert type(offset) == int
-        assert 0 <= offset <= 255
-        self._write(REG_FIFO_PTR, offset)
+        hi,med,low = self._read(REG_CARRIER_FREQ, 3)
+        val = hi << 16 | med << 8 | low
+        return int(round(val * OSC_FREQ / 2**19))
 
 
-    def set_tx_freq(self, freq):
-        """Sets the radio carrier frequency for transmit operation.
-        This is isolated from the receive operation to allow
-        a defined offset to improve packet rejection (Errata 2.3).
+    def set_rf(self, **rf_stngs):
+        """Sets the RF parameters of the SX127x.
+        rf_stngs is one or more of the following parameters:
+            "freq", "pa_sel", "max_pwr", "out_pwr", "ocp_on", "ocp_trim",
+            "lna_gain", "lna_boost_lf", "lna_boost_hf"
+        These parameters correspond to fieds in regs 0x01 .. 0x0C.
         """
-        assert 137e6 < freq < 1020e6
-        self._write_freq(freq)
+        keys = rf_stngs.keys()
+        for key in keys:
+            assert key in ("freq", "pa_sel", "max_pwr",
+                           "out_pwr", "ocp_on", "ocp_trim",
+                           "lna_gain", "lna_boost_lf", "lna_boost_hf")
+
+        regs = self._read(REG_OP_MODE, 9)
+        # TODO: iterate through settings, rmw regs
 
 
     def set_pwr_cfg(self, pwr=0xf, max=0x4, boost=True):
@@ -456,14 +282,205 @@ class SX127xSpi(object):
         self._write(REG_PA_CFG, r)
 
 
+
+## LoRa modem methods
+
+    def clear_lora_counts(self,):
+        """Clears the valid header count and valid packet count regs.
+        """
+        self._write(REG_RX_HDR_CNT, [0,0,0,0])
+
+
+    def clear_lora_irqs(self, irq_bits=None):
+        """Clears interrupt flags.
+        If an argument is given, it is a byte with a bit set
+        for each IRQ flag to clear.
+        If no argument is given, all IRQ flags are cleared.
+        """
+        if irq_bits:
+            d = irq_bits
+        else:
+            d = 0xFF
+        self._write(REG_IRQ_FLAGS, d)
+
+
+    def enable_lora_irqs(self, irq_bits=None):
+        """Enables one or more IRQs.
+        If an argument is given, it is a byte
+        with a bit set for each IRQ to enable.
+        IRQs are enabled by writing a zero
+        to the bit in the mask register.
+        """
+        if irq_bits:
+            d = ~irq_bits
+        else:
+            d = 0x00
+        self._write(REG_IRQ_MASK, d)
+
+
+    def disable_lora_irqs(self, irq_bits=None):
+        """Disables one or more IRQs.
+        If an argument is given, it is a byte
+        with a bit set for each IRQ to disable.
+        If no argument is given, all IRQs are disabled.
+        IRQs are disabled by writing a one
+        to the bit in the mask register.
+        """
+        if irq_bits:
+            d = irq_bits
+        else:
+            d = 0xFF
+        self._write(REG_IRQ_MASK, d)
+
+
+    def check_lora_rx_flags(self,):
+        """Checks post-receive status, clears rx-related IRQs.
+        Returns True if a valid packet was received, else False.
+        """
+        # Get the IRQ flags
+        flags = self._read(REG_IRQ_FLAGS)[0]
+
+        # Clear rx-related IRQ flags in the reg
+        flags &= ( IRQFLAGS_RXTIMEOUT_MASK
+                 | IRQFLAGS_RXDONE_MASK
+                 | IRQFLAGS_PAYLOADCRCERROR_MASK
+                 | IRQFLAGS_VALIDHEADER_MASK )
+        self._write(REG_IRQ_FLAGS, flags)
+
+        result = bool(flags & IRQFLAGS_RXDONE_MASK)
+        if flags & ( IRQFLAGS_RXTIMEOUT_MASK
+                   | IRQFLAGS_PAYLOADCRCERROR_MASK):
+            result = False
+        return result
+
+
+    def get_lora_rxd(self,):
+        """Returns the most recently received payload and rf channel data.
+        Assumes caller has already determined check_lora_rx_flags() is True.
+        Returns a tuple of: (payld, rssi, snr)
+        payld is a list of integers.
+        rssi is an integer [dBm].
+        snr is a float [dB].
+        """
+        # Get the index into the FIFO of where the pkt starts
+        # and the length of the data received
+        pkt_start, _, _, nbytes = self._read(REG_RX_CURRENT_ADDR, 4)
+
+        # Error checking (that pkt started at 0)
+#        if pkt_start != 0: "pkt_start was %d" % pkt_start # TODO: logging
+
+        # Read the payload
+        self._write(REG_FIFO_PTR, pkt_start)
+        payld = self._read(REG_FIFO, nbytes)
+
+        # Get the packet SNR and RSSI (2 consecutive regs)
+        # and calculate RSSI [dBm] and SNR [dB]
+        snr, rssi = self._read(REG_PKT_SNR, 2)
+        rssi = -157 + rssi
+        snr = snr / 4.0
+
+        return (payld, rssi, snr)
+
+
+    def get_lora_status(self,):
+        """Gets status fields.
+        Returns a dict of status fields.
+        """
+        d = self._read(REG_RX_HDR_CNT, 5)
+        s = {}
+        s["rx_hdr_cnt"] = d[0] << 8 | d[1]
+        s["rx_pkt_cnt"] = d[2] << 8 | d[3]
+        s["rx_code_rate"] = d[4] >> 5
+        s["modem_clr"] = (d[4] & 0x10) != 0
+        s["hdr_info_valid"] = (d[4] & 0x08) != 0
+        s["rx_busy"] = (d[4] & 0x04) != 0
+        s["sig_sync"] = (d[4] & 0x01) != 0
+        s["sig_detected"] = (d[4] & 0x01) != 0
+        return s
+
+
+    def set_config(self, cfg):
+        """Writes configuration values to the appropriate registers
+        """
+        assert isinstance(cfg, phy_sx127x_stngs.SX127xSettings)
+
+        # Save cfg
+        self.cfg = cfg
+
+        self.bandwidth_idx = cfg.bandwidth_idx
+
+        # Transition to sleep mode to write configuration
+        mode_bkup = self.get_op_mode()
+        if mode_bkup != "sleep":
+            self.set_op_mode("sleep")
+
+        # Concat bandwidth | code_rate | implicit header mode
+        reg_cfg1 = cfg.bandwidth_idx << 4 \
+            | cfg.code_rate_idx << 1 \
+            | int(cfg.implct_hdr_mode)
+        # Concat spread_factor | tx_cont | upper 2 bits of symbol count
+        reg_cfg2 = cfg.spread_factor_idx << 4 \
+            | int(cfg.tx_cont) << 3 \
+            | int(cfg.en_crc) << 2 \
+            | cfg.symbol_count >> 8
+        # Lower 8 bits of symbol count go in reg(0x1F)
+        reg_sym_to = cfg.symbol_count & 0xff
+        # Write 3 contiguous regs at once
+        self._write(REG_MODEM_CFG_1, [reg_cfg1, reg_cfg2, reg_sym_to])
+
+        # Write preamble register
+        reg_preamble_len = [cfg.preamble_len >> 8, cfg.preamble_len & 0xff]
+        self._write(REG_PREAMBLE_LEN, reg_preamble_len)
+
+        # Write Cfg3 reg
+        reg_cfg3 = int(cfg.en_ldr) << 3 | int(cfg.agc_auto) << 2
+        self._write(REG_MODEM_CFG_3, reg_cfg3)
+
+        # Write Sync word
+        self._write(REG_SYNC_WORD, cfg.sync_word)
+
+        # Restore previous operating mode
+        if mode_bkup != "sleep":
+            self.set_op_mode(mode_bkup)
+
+
+    def set_fifo(self, data, offset=None):
+        """Writes the data to the FIFO.
+        Data is either an int or a sequence of bytes
+        If the offset is given, data is written there;
+        otherwise, data is written at the current FIFO pointer.
+        """
+        if offset is not None: #TODO: and modem is "lora"
+            self.set_lora_fifo_ptr(offset)
+
+        self._write(REG_FIFO, data)
+
+
+    def set_lora_fifo_ptr(self, offset=0):
+        """Sets the FIFO address pointer.
+        """
+        assert type(offset) == int
+        assert 0 <= offset <= 255
+        self._write(REG_FIFO_PTR, offset)
+
+
     def set_tx_data(self, data):
         """Sets the FIFO pointers, the transmit data
         and the payload length register
         in preparation for transmit.
         """
         self._write(REG_PAYLD_LEN, len(data))
-        self._write(REG_FIFO_PTR, [self.tx_base_ptr, self.tx_base_ptr])
+        self._write(REG_FIFO_PTR, [self._tx_base_ptr, self._tx_base_ptr])
         self.set_fifo(data)
+
+
+    def set_tx_freq(self, freq):
+        """Sets the radio carrier frequency for transmit operation.
+        This is isolated from the receive operation to allow
+        a defined offset to improve packet rejection (Errata 2.3).
+        """
+        assert 137e6 < freq < 1020e6
+        self._write_freq(freq)
 
 
     def _write_freq(self, f, offset=0.0):
@@ -476,27 +493,10 @@ class SX127xSpi(object):
         self._write(REG_CARRIER_FREQ, d)
 
 
-    def set_irqs(self, irq_mask=0, irq_flags=0):
-        """Sets interrupt mask and flags registers.
+    def set_op_mode(self, mode="stdby"):
+        """Sets the device mode in the operating mode register to one of
+        these strings: sleep, stdby, fstx, tx, fsrx, rxcont, rx, cad
         """
-        d = [irq_mask, irq_flags]
-        self._write(REG_IRQ_MASK, d)
-
-
-    def set_op_mode(self,
-                    mode="sleep",
-                    lora=True,
-                    fsk_access=False,
-                    en_low_freq=True):
-        """Sets the operating mode register to configure the device mode
-        (one of these strings: sleep, stdby, fstx, tx, fsrx, rxcont, rx, cad)
-        and whether to use LoRa or FSK modulation
-        and whether to use the low-frequency mode.
-        """
-        assert lora in (0,1,False,True)
-        assert fsk_access in (0,1,False,True)
-        assert en_low_freq in (0,1,False,True)
-
         # validate mode argument
         mode_lut = {"sleep": 0b000,
                     "stdby": 0b001,
@@ -505,18 +505,29 @@ class SX127xSpi(object):
                     "tx": 0b011,
                     "fsrx": 0b100,
                     "rxcont": 0b101,
-                    "rx": 0b110,
+                    "rx": 0b110, # same as rxonce
                     "rxonce": 0b110, # repeat for convenience
                     "cad": 0b111}
         mode_options = list(mode_lut.keys())
         mode_options.sort()
         assert mode in mode_options, "mode must be one of: " + str(mode_options)
+        d = self._read(REG_OP_MODE)
+        d &= 0b11111000
+        d |= mode_lut[mode]
+        self._write(REG_OP_MODE)
 
-        d = int(lora) << 7 | int(fsk_access) << 6 | int(en_low_freq) << 3 | mode_lut[mode]
-        self._write(REG_OP_MODE, d)
+
+    def set_lora(self, **lora_stngs):
+        """Applies the given LoRa register settings.
+        Settings is one or more of the following strings: TBD.
+        Low-frequency mode is determined directly from the given frequency.
+        """
+        keys = lora_stngs.keys()
+        for key in keys:
+            assert key in () # TODO
 
 
-    def set_rx_fifo(self, offset=0):
+    def set_lora_rx_fifo(self, offset=0):
         """Sets the RX base pointer and FIFO pointer
         to the given offset (defaults to zero).
         """
@@ -524,7 +535,7 @@ class SX127xSpi(object):
         self._write(REG_FIFO_PTR, offset)
 
 
-    def set_rx_freq(self, freq):
+    def set_lora_rx_freq(self, freq):
         """Sets the frequency register to achieve the desired freq.
         Implements Semtech ERRATA 2.3 for improved RX packet rejection.
         """
@@ -549,7 +560,7 @@ class SX127xSpi(object):
             self._write(0x2F, [val_2f_lut[self.bandwidth_idx], 0])
 
 
-    def set_rx_timeout(self, symbol_count):
+    def set_lora_rx_timeout(self, symbol_count):
         """Sets the RX symbol count to achieve the desired timeout.
         """
         # TODO argument should be time, then do math to get symbol count
@@ -559,3 +570,15 @@ class SX127xSpi(object):
         r1 |= (symbol_count >> 8)
         r2 = (symbol_count & 0xFF)
         self._write(REG_MODEM_CFG_2, [r1,r2])
+
+
+## FSK/OOK modem methods
+
+    def get_fsk_temperature(self,):
+        """Returns the temperature.
+        """
+        # TODO: See PDF p89 for procedure & calibration
+        # TODO: find way to safely [re]store FSK access to be able to read temp
+        t = self._read(REG_TEMP)
+        # TODO: convert t to degrees C
+        return t

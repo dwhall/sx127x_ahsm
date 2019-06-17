@@ -143,7 +143,7 @@ class SX127xSettings(object):
         assert 0 <= val <= 2**10 - 1, "symbol_count must be within the range 0 .. 1023, inclusive"
         self.stngs_dict["symbol_count"] = val
 
-    def set_rx_timeout(self, secs):
+    def set_lora_rx_timeout(self, secs):
         """Calculates the symbol_count property to achieve the desired timeout
         given in seconds (float)
         """
