@@ -36,13 +36,13 @@ class GpioAhsm(farc.Ahsm):
     def __init__(self,):
         super().__init__()
         GPIO.setmode(GPIO.BCM)
+        self._out_pins = []
 
 
     @farc.Hsm.state
     def _initial(me, event):
         """Pseudostate: GpioAhsm:_initial
         """
-        farc.Signal.register("_ALWAYS")
         return me.tran(me, GpioAhsm._running)
 
 
@@ -67,9 +67,13 @@ class GpioAhsm(farc.Ahsm):
     @farc.Hsm.state
     def _exiting(me, event):
         """State: GpioAhsm:_exiting
+        For each pin registered as an output,
+        sets the pin to an input (a safe condition).
         """
         sig = event.signal
         if sig == farc.Signal.ENTRY:
+            for pin_nmbr in self._out_pins:
+                GPIO.setup(pin_nmbr, GPIO.IN)
             return me.handled(me, event)
 
         return me.super(me, me.top)
@@ -83,7 +87,8 @@ class GpioAhsm(farc.Ahsm):
         GPIO.add_event_detect(pin_nmbr, edge=pin_edge, callback=lambda x: _gpio_input_handler(sig_num))
 
 
-#    def register_pin_out(self, pin_nmbr, pin_initial):
-#        """Registers an output pin to be set with an initial value.
-#        """
-#        GPIO.setup(pin_nmbr, GPIO.OUT, initial=pin_initial)
+    def register_pin_out(self, pin_nmbr, pin_initial):
+        """Registers an output pin to be set with an initial value.
+        """
+        GPIO.setup(pin_nmbr, GPIO.OUT, initial=pin_initial)
+        self._out_pins.append(pin_nmbr)
