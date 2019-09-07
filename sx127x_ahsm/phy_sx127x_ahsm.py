@@ -74,7 +74,7 @@ class SX127xSpiAhsm(farc.Ahsm):
                 # me.sx127x.get_regs()
                 me.sx127x.get_dio()
                 me.sx127x.get_freq()
-                mode = ms.sx127x.get_op_mode()
+                mode = me.sx127x.get_op_mode()
                 if mode == "sleep":
                     return me.tran(me, SX127xSpiAhsm._sleeping)
 
