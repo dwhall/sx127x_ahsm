@@ -3,10 +3,11 @@
 Copyright 2017 Dean Hall.  See LICENSE for details.
 
 Physical Layer State Machine for SX127x device
-- models SX127x device operation
+- models desired SX127x device behavior
 - SX127x device control via SPI bus
 - establishes Transmit and Receive sequences
 - responds to a handful of events (expected from Layer 2 (MAC))
+- responds to GPIO events from the SX127x chip's DIOx pins
 """
 
 import logging
@@ -18,9 +19,13 @@ from . import phy_cfg
 from . import phy_sx127x_spi
 
 class SX127xSpiAhsm(farc.Ahsm):
-    # Transmit Margin:
-    # A transmit begins this amount of time after the beginning of a Tslot
-    # to allow other nodes time to enable their receiver
+    # Maximum amount of time to perform blocking sleep (seconds).
+    # If a sleep time longer than this is requested,
+    # the sleep time becomes this value.
+    MAX_BLOCKING_TIME = 0.050 # secs
+
+    # Margin time added to transmit time
+    # to allow other nodes to enable their receiver
     TX_MARGIN = 0.005 # secs
 
     @farc.Hsm.state
@@ -70,19 +75,15 @@ class SX127xSpiAhsm(farc.Ahsm):
         sig = event.signal
         if sig == farc.Signal.ENTRY:
             if me.sx127x.check_chip_ver():
-                # Gather current settings/reg vals from chip
-                # me.sx127x.get_regs()
                 me.sx127x.get_dio()
                 me.sx127x.get_freq()
                 mode = me.sx127x.get_op_mode()
-                if mode == "sleep":
-                    return me.tran(me, SX127xSpiAhsm._sleeping)
-
-                me.sx127x.set_op_mode('stdby') # FIXME: TEMPORARY!
+                me.sx127x.set_op_mode('stdby')
                 me.postFIFO(farc.Event(farc.Signal._DEFAULT_CFG, None))
             else:
-                # TODO: no SX127x or no SPI
-                pass
+                logging.info("_initializing: no SX127x or SPI")
+                me.tran(me, SX127xSpiAhsm._exiting)
+
             return me.handled(me, event)
 
         elif sig == farc.Signal._DEFAULT_CFG:
@@ -152,8 +153,6 @@ class SX127xSpiAhsm(farc.Ahsm):
         If rx_time is zero or less, receive immediately.
         Always transfer to the Receiving state.
         """
-        MAX_BLOCK_TIME = 0.050 # secs
-
         sig = event.signal
         if sig == farc.Signal.ENTRY:
 
@@ -174,9 +173,9 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.handled(me, event)
 
         elif sig == farc.Signal._ALWAYS:
-            if me.rx_time >= 0:
+            if me.rx_time > 0:
                 tiny_sleep = me.rx_time - farc.Framework._event_loop.time()
-                if 0.0 < tiny_sleep < MAX_BLOCK_TIME:
+                if 0.0 < tiny_sleep < SX127xSpiAhsm.MAX_BLOCKING_TIME:
                     time.sleep(tiny_sleep)
             return me.tran(me, SX127xSpiAhsm._receiving)
 
@@ -259,18 +258,19 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.handled(me, event)
 
         elif sig == farc.Signal._ALWAYS:
-            # Calculate precise sleep time and apply a TX margin
-            # to allow receivers time to get ready
-            tiny_sleep = me.tx_time - farc.Framework._event_loop.time()
-            tiny_sleep += SX127xSpiAhsm.TX_MARGIN
+            if me.tx_time > 0:
+                # Calculate precise sleep time and apply a TX margin
+                # to allow receivers time to get ready
+                tiny_sleep = me.tx_time - farc.Framework._event_loop.time()
+                tiny_sleep += SX127xSpiAhsm.TX_MARGIN
 
-            # If TX time has passed, don't sleep
-            # Else use sleep to get ~1ms precision
-            # Cap sleep at 50ms so we don't block for too long
-            if 0.0 < tiny_sleep: # because MAC layer uses 40ms PREP time
-                if tiny_sleep > 0.050:
-                    tiny_sleep = 0.050
-                time.sleep(tiny_sleep)
+                # If TX time has passed, don't sleep
+                # Else use sleep to get ~1ms precision
+                # Cap sleep at 50ms so we don't block for too long
+                if 0.0 < tiny_sleep: # because MAC layer uses 40ms PREP time
+                    if tiny_sleep > SX127xSpiAhsm.MAX_BLOCKING_TIME:
+                        tiny_sleep = SX127xSpiAhsm.MAX_BLOCKING_TIME
+                    time.sleep(tiny_sleep)
             return me.tran(me, SX127xSpiAhsm._transmitting)
 
         return me.super(me, me._idling)
@@ -297,3 +297,14 @@ class SX127xSpiAhsm(farc.Ahsm):
 
         return me.super(me, me._working)
 
+
+    @farc.Hsm.state
+    def _exiting(me, event):
+        """State: SX127xSpiAhsm:_exiting
+        """
+        sig = event.signal
+        if sig == farc.Signal.ENTRY:
+            logging.info("_exiting")
+            return me.handled(me, event)
+
+        return me.super(me, me.top)
