@@ -41,6 +41,7 @@ class SX127xSpiAhsm(farc.Ahsm):
 
         # Incoming
         farc.Signal.register("PHY_STDBY")
+        farc.Signal.register("PHY_SET_LORA")
 
         # Incoming from higher layer
         farc.Framework.subscribe("PHY_SLEEP", me)
@@ -109,7 +110,9 @@ class SX127xSpiAhsm(farc.Ahsm):
         elif sig == farc.Signal.PHY_SLEEP:
             return me.tran(me, me.sleeping)
 
-        elif sig == farc.Signal.SET_LORA:
+        elif sig == farc.Signal.PHY_SET_LORA:
+            # TODO
+            return me.handled(me, event)
 
         elif sig == farc.Signal.PHY_RECEIVE:
             me.rx_time = event.value[0]

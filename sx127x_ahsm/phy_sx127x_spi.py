@@ -519,10 +519,10 @@ class SX127xSpi(object):
         mode_options = list(mode_lut.keys())
         mode_options.sort()
         assert mode in mode_options, "mode must be one of: " + str(mode_options)
-        d = self._read(REG_OP_MODE)
+        d = self._read(REG_OP_MODE)[0]
         d &= 0b11111000
         d |= mode_lut[mode]
-        self._write(REG_OP_MODE)
+        self._write(REG_OP_MODE, d)
 
 
     def set_lora(self, **lora_stngs):
