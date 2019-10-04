@@ -22,6 +22,41 @@ class SX127xSettings(dict):
 
 
 
+class SX127xModemSettings(SX127xSettings):
+    """Validates and stores SX127x modem settings.
+    """
+    def __setitem__(self, k, v):
+        """Throws an AssertionError if either the key (setting)
+        or value is invalid.
+        """
+        setting_names = list(self.__class__.validate_and_set.keys())
+        setting_names.sort()
+        assert k in setting_names, "setting must be one of: " + str(setting_names)
+        self.validate_and_set[k](self, v)
+
+
+    def _validate_modulation(self, val):
+        """Validates and sets the modulation which affects
+        RegOpMode fields: LongRangeMode and Modulation Type.
+        """
+        modulation_lut = ("lora", "fsk", "ook")
+        assert val in modulation_lut, "setting must be one of: " + str(modulation_lut)
+        super().__setitem__("modulation", val)
+
+
+    def _validate_lf_mode(self, val):
+        """Validates and sets lf_mode.
+        """
+        assert type(val) is bool
+        super().__setitem__("lf_mode", val)
+
+
+    validate_and_set = {
+        "modulation": _validate_modulation,
+        "lf_mode": _validate_lf_mode,
+    }
+
+
 class SX127xLoraSettings(SX127xSettings):
     """Validates and stores SX127x LoRa settings.
     """
