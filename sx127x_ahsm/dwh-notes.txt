@@ -1,0 +1,86 @@
+SX127X PHY Layer
+================
+
+
+Protocols
+---------
+
+- CSMA multi-hop
+- TDMA multi-hop
+- Flood
+
+
+Projects
+--------
+
+- UDP Bridge
+- Codec2 Voice
+- SDR/HackRF sniffer
+- [gr-lora](https://github.com/rpp0/gr-lora)
+
+
+SX127x Notes
+------------
+
+LF := Bands 2,3 == below 525 MHz,
+HF := Band 1 == above *62 MHz
+
+
+Code TODOs
+----------
+
+- add _sleeping state
+- Remove sig _DEFAULT_CFG; instead init actual settings from regs
+- Create sig SET_XXX; takes dict of ("stng": val) applies to .desired_stngs
+- where XXX is one of: MODEM, RF, LORA, FSK
+- When AHSM is in _idling, applies any outstanding settings
+- Regs-to-stngs and stngs-to-regs is HARD because of masking.
+    - If a setting changes, in some cases, must RMW and use mask because other bits in reg may have changed
+- ahsms should:
+    - keep own settings instances
+    - init with default settings
+    - accept new settings as (key,val) pairs
+- Replace set_config() with three-step settings functions:
+    1) set_modem()
+    2) set_rf()
+    3) set_lora() or set_fsk()
+
+- set_modem() # reg 0x01 (sleeping)
+
+======  ==========  ==============  ======
+Reg     Field       Details         Field
+======  ==========  ==============  ======
+ 0x01   LrMode      0:Fsk, 1:LoRa   modulation: [lora, fsk, ook]
+        Modlxn      00:Fsk, 01:OOK  (see above)
+        LfMode      0:HF, 1:LF      wired, config
+        OpMode      [sleep, stdby, FsTx, Tx, FsRx, Rx...] | op_mode
+======  ==========  ==============  ======
+
+- set_rf()   # regs 0x01-0x0C
+
+======= ==========  ========
+Reg     Field       Details
+======= ==========  ========
+ 0x06-8 Frf         RF freq
+ 0x09   PaSel       0:RFOpin, 1:PaBoost
+        MaxPwr      3b
+        OutPwr      4b
+ 0x0B   OcpOn       0:OcpDis, 1:OcpEn
+        OcpTrim     5b
+ 0x0C   LnaGain     3b
+        LnaBoostLf  2b
+        LnaBoostHf  2b
+======= ==========  ========
+
+- set_lora()    # regs 0x0D..
+- set_fsk()     # regs 0x0D..
+
+
+Changes
+-------
+
+======================  ==========  ======================
+module                  from        to
+======================  ==========  ======================
+phy_sx127x_spi          set_confg   set_lora_settings
+======================  ==========  ======================

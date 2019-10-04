@@ -8,47 +8,66 @@ import collections
 import time
 
 
-class SX127xSettings(object):
+class SX127xSettings(dict):
     """Base class for SX127x device settings.
-    LoRa and FSK settings are derived from this.
+    Modem, RF, LoRa and FSK settings are derived from this.
     """
-    def __init__(self,):
-
-        # Settings are kept in this dict
-        self.stngs_dict = {}
-
-
-    def to_dict(self,):
-        """Returns the current settings as a Python dict.
+    def __init__(self, stngs_dict={}):
+        """Validates any given settings dict
+        or inits with an empty settings dict.
         """
-        return self.stngs_dict
+        assert type(stngs_dict) in (dict, self.__class__)
+        super().__init__(stngs_dict)
+        self.update(stngs_dict)
+
 
 
 class SX127xLoraSettings(SX127xSettings):
-    """Validates and stores SX127x device settings.
+    """Validates and stores SX127x LoRa settings.
     """
-    def __init__(self, **stngs_dict):
-        super().__init__()
+    def __setitem__(self, k, v):
+        """Throws an AssertionError if either the key (setting)
+        or value is invalid.
+        """
+        setting_names = list(self.__class__.validate_and_set.keys())
+        setting_names.sort()
+        assert k in setting_names, "setting must be one of: " + str(setting_names)
+        self.validate_and_set[k](self, v)
 
-        # The names of LoRa modem settings handled by this container class
-        settings = ("bandwidth", "code_rate", "implct_hdr_mode",
-            "spread_factor", "tx_cont", "en_crc", "symbol_count",
-            "preamble_len", "en_ldr", "agc_auto", "sync_word")
+
+    def set_lora_rx_timeout(self, secs):
+        """Calculates the symbol_count property to achieve the desired timeout
+        given in seconds (float)
+        """
+        assert type(secs) in (int, float)
+        assert "bandwidth" in self
+
+        symbol_rate = self["bandwidth"] / 2**self["spread_factor_idx"]
+        self.symbol_count = round(secs * symbol_rate)
 
 
-        # For each item given to the constructor,
-        # check that it is an acceptable setting and
-        # set the item via the setter (which will validate the value)
-        for k,v in stngs_dict.items():
-            assert k in settings
-            setattr(self, k, v)
+    def _validate_trx_mode(self, val):
+        """Validates and sets transceiver mode.
+        """
+        trx_mode_lut = {
+            "sleep": 0b000,
+            "stdby": 0b001,
+            "standby": 0b001, # repeat for convenience
+            "fstx": 0b010,
+            "tx": 0b011,
+            "fsrx": 0b100,
+            "rxcont": 0b101,
+            "rx": 0b110, # same as rxonce
+            "rxonce": 0b110, # repeat for convenience
+            "cad": 0b111,
+            }
+        trx_mode_options = list(trx_mode_lut.keys())
+        trx_mode_options.sort()
+        assert val in trx_mode_options, "trx_mode must be one of: " + str(trx_mode_options)
+        super().__setitem__("trx_mode", val)
 
-    @property
-    def bandwidth(self,):
-        return self.stngs_dict.get("bandwidth", None)
 
-    @bandwidth.setter
-    def bandwidth(self, val):
+    def _validate_bandwidth(self, val):
         """Validates and sets bandwidth.
         """
         bandwidth_lut = {
@@ -65,16 +84,11 @@ class SX127xLoraSettings(SX127xSettings):
         bandwidth_options = list(bandwidth_lut.keys())
         bandwidth_options.sort()
         assert val in bandwidth_options, "bandwidth must be one of: " + str(bandwidth_options)
-        self.stngs_dict["bandwidth"] = val
-        self.bandwidth_idx = bandwidth_lut[val]
+        super().__setitem__("bandwidth", val)
+        super().__setitem__("_bandwidth_idx", bandwidth_lut[val])
 
 
-    @property
-    def code_rate(self,):
-        return self.stngs_dict.get("code_rate", None)
-
-    @code_rate.setter
-    def code_rate(self, val):
+    def _validate_code_rate(self, val):
         """Validates and sets code_rate.
         """
         code_rate_lut = {
@@ -85,28 +99,18 @@ class SX127xLoraSettings(SX127xSettings):
         code_rate_options = list(code_rate_lut.keys())
         code_rate_options.sort()
         assert val in code_rate_options, "code_rate must be one of: " + str(code_rate_options)
-        self.stngs_dict["code_rate"] = val
-        self.code_rate_idx = code_rate_lut[val]
+        super().__setitem__("code_rate", val)
+        super().__setitem__("_code_rate_idx", code_rate_lut[val])
 
 
-    @property
-    def implct_hdr_mode(self,):
-        return self.stngs_dict.get("implct_hdr_mode", None)
-
-    @implct_hdr_mode.setter
-    def implct_hdr_mode(self, val):
+    def _validate_implct_hdr_mode(self, val):
         """Validates and sets implct_hdr_mode.
         """
         assert type(val) is bool
-        self.stngs_dict["implct_hdr_mode"] = val
+        super().__setitem__("implct_hdr_mode", val)
 
 
-    @property
-    def spread_factor(self,):
-        return self.stngs_dict.get("spread_factor", None)
-
-    @spread_factor.setter
-    def spread_factor(self, val):
+    def _validate_spread_factor(self, val):
         """Validates and sets spread_factor.
         """
         spread_factor_lut = {
@@ -120,99 +124,85 @@ class SX127xLoraSettings(SX127xSettings):
         spread_factor_options = list(spread_factor_lut.keys())
         spread_factor_options.sort()
         assert val in spread_factor_options, "spread_factor must be one of: " + str(spread_factor_options)
-        self.stngs_dict["spread_factor"] = val
-        self.spread_factor_idx = spread_factor_lut[val]
+        super().__setitem__("spread_factor", val)
+        super().__setitem__("_spread_factor_idx", spread_factor_lut[val])
 
 
-    @property
-    def tx_cont(self,):
-        return self.stngs_dict.get("tx_cont", None)
-
-    @tx_cont.setter
-    def tx_cont(self, val):
+    def _validate_tx_cont(self, val):
         """Validates and sets tx_cont.
         """
         assert type(val) is bool
-        self.stngs_dict["tx_cont"] = val
+        super().__setitem__("tx_cont", val)
 
 
-    @property
-    def en_crc(self,):
-        return self.stngs_dict.get("en_crc", None)
-
-    @en_crc.setter
-    def en_crc(self, val):
+    def _validate_en_crc(self, val):
         """Validates and sets en_crc.
         """
         assert type(val) is bool
-        self.stngs_dict["en_crc"] = val
+        super().__setitem__("en_crc", val)
 
 
-    @property
-    def symbol_count(self,):
-        return self.stngs_dict.get("symbol_count", None)
-
-    @symbol_count.setter
-    def symbol_count(self, val):
+    def _validate_symbol_count(self, val):
         """Validates and sets symbol_count.
         """
         assert type(val) is int, "symbol_count must be a whole number"
         assert 0 <= val <= 2**10 - 1, "symbol_count must be within the range 0 .. 1023, inclusive"
-        self.stngs_dict["symbol_count"] = val
-
-    def set_lora_rx_timeout(self, secs):
-        """Calculates the symbol_count property to achieve the desired timeout
-        given in seconds (float)
-        """
-        assert type(secs) in (int, float)
-
-        symbol_rate = self.bandwidth / 2**self.spread_factor_idx
-        self.symbol_count = round(secs * symbol_rate)
+        super().__setitem__("symbol_count", val)
 
 
-    @property
-    def preamble_len(self,):
-        return self.stngs_dict.get("preamble_len", None)
-
-    @preamble_len.setter
-    def preamble_len(self, val):
+    def _validate_preamble_len(self, val):
         """Validates and sets preamble_len.
         """
         assert 7 <= val <= 65535, "preamble_len must be within the range 7 .. 65535, inclusive"
-        self.stngs_dict["preamble_len"] = val
+        super().__setitem__("preamble_len", val)
 
 
-    @property
-    def en_ldr(self,):
-        return self.stngs_dict.get("en_ldr", None)
-
-    @en_ldr.setter
-    def en_ldr(self, val):
+    def _validate_en_ldr(self, val):
         """Validates and sets en_ldr.
         """
         assert type(val) is bool
-        self.stngs_dict["en_ldr"] = val
+        super().__setitem__("en_ldr", val)
 
 
-    @property
-    def agc_auto(self,):
-        return self.stngs_dict.get("agc_auto", None)
-
-    @agc_auto.setter
-    def agc_auto(self, val):
+    def _validate_agc_auto(self, val):
         """Validates and sets agc_auto.
         """
         assert type(val) is bool
-        self.stngs_dict["agc_auto"] = val
+        super().__setitem__("agc_auto", val)
 
 
-    @property
-    def sync_word(self,):
-        return self.stngs_dict.get("sync_word", None)
-
-    @sync_word.setter
-    def sync_word(self, val):
+    def _validate_sync_word(self, val):
         """Validates and sets sync_word.
         """
         assert 0 <= val <= 255, "sync_word must be within the range 0 .. 255, inclusive"
-        self.stngs_dict["sync_word"] = val
+        super().__setitem__("sync_word", val)
+
+
+    # The names of LoRa modem settings handled by this container class
+    validate_and_set = {
+        "trx_mode": _validate_trx_mode,
+        "bandwidth": _validate_bandwidth,
+        "code_rate": _validate_code_rate,
+        "implct_hdr_mode": _validate_implct_hdr_mode,
+        "spread_factor": _validate_spread_factor,
+        "tx_cont": _validate_tx_cont,
+        "en_crc": _validate_en_crc,
+        "symbol_count": _validate_symbol_count,
+        "preamble_len": _validate_preamble_len,
+        "en_ldr": _validate_en_ldr,
+        "agc_auto": _validate_agc_auto,
+        "sync_word": _validate_sync_word,
+    }
+
+
+if __name__ == "__main__":
+    d = {"sync_word": 5}
+    #d = {"sync_word": 500}
+    l = SX127xLoraSettings(d)
+    #l['timmy'] = 0
+    l = SX127xLoraSettings()
+    #l["sync_word"] = 500
+    l["bandwidth"] = 125000
+    l["trx_mode"] = "stdby"
+
+    print(l)

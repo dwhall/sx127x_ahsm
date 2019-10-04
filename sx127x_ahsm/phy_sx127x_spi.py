@@ -505,6 +505,7 @@ class SX127xSpi(object):
         """Sets the device mode in the operating mode register to one of
         these strings: sleep, stdby, fstx, tx, fsrx, rxcont, rx, cad
         """
+        # TODO: let the settings dict validate the argument
         # validate mode argument
         mode_lut = {"sleep": 0b000,
                     "stdby": 0b001,
