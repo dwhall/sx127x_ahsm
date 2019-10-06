@@ -26,23 +26,32 @@ LF := Bands 2,3 == below 525 MHz,
 HF := Band 1 == above *62 MHz
 
 
+Code DONEs
+----------
+- AHSMs init with app settings
+- AHSM now closes the SPI port when _exiting
+- Moved settings definition file to app/project layer
+- SPI settings convey through AHSM to spi module by necessity
+- Removed sig _DEFAULT_CFG
+
+
 Code TODOs
 ----------
 
 - add _sleeping state
-- Remove sig _DEFAULT_CFG; instead init actual settings from regs
 - Create sig SET_XXX; takes dict of ("stng": val) applies to .desired_stngs
-- where XXX is one of: MODEM, RF, LORA, FSK
+    where XXX is one of: MODEM, RF, LORA, FSK
 - When AHSM is in _idling, applies any outstanding settings
-- Regs-to-stngs and stngs-to-regs is HARD because of masking.
-    - If a setting changes, in some cases, must RMW and use mask because other bits in reg may have changed
 - ahsms should:
-    - keep own settings instances
-    - init with default settings
+    - keep own settings instances?
+    - init with app settings
     - accept new settings as (key,val) pairs
 - Replace set_config() with three-step settings functions:
     1) set_modem()
+        modulation
+        lf_mode
     2) set_rf()
+
     3) set_lora() or set_fsk()
 
 - set_modem() # reg 0x01 (sleeping)

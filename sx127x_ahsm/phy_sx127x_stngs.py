@@ -18,8 +18,8 @@ class SX127xSettings(dict):
         """
         assert type(stngs_dict) in (dict, self.__class__)
         super().__init__(stngs_dict)
-        self.update(stngs_dict)
-
+        for k, v in stngs_dict.items():
+            self[k] = v
 
 
 class SX127xModemSettings(SX127xSettings):
@@ -39,8 +39,8 @@ class SX127xModemSettings(SX127xSettings):
         """Validates and sets the modulation which affects
         RegOpMode fields: LongRangeMode and Modulation Type.
         """
-        modulation_lut = ("lora", "fsk", "ook")
-        assert val in modulation_lut, "setting must be one of: " + str(modulation_lut)
+        modulations = ("lora", "fsk", "ook")
+        assert val in modulations, "setting must be one of: " + str(modulations)
         super().__setitem__("modulation", val)
 
 
@@ -70,21 +70,12 @@ class SX127xLoraSettings(SX127xSettings):
         self.validate_and_set[k](self, v)
 
 
-    def set_lora_rx_timeout(self, secs):
-        """Calculates the symbol_count property to achieve the desired timeout
-        given in seconds (float)
-        """
-        assert type(secs) in (int, float)
-        assert "bandwidth" in self
-
-        symbol_rate = self["bandwidth"] / 2**self["spread_factor_idx"]
-        self.symbol_count = round(secs * symbol_rate)
-
-
-    def _validate_trx_mode(self, val):
+    def _validate_op_mode(self, val):
         """Validates and sets transceiver mode.
         """
-        trx_mode_lut = {
+        # NOTE: dict isn't needed here.  Could reduce to tuple
+        # TODO: See if there's a way to reduce dual maintenance with set_lora_op_mode()
+        op_mode_lut = {
             "sleep": 0b000,
             "stdby": 0b001,
             "standby": 0b001, # repeat for convenience
@@ -96,10 +87,10 @@ class SX127xLoraSettings(SX127xSettings):
             "rxonce": 0b110, # repeat for convenience
             "cad": 0b111,
             }
-        trx_mode_options = list(trx_mode_lut.keys())
-        trx_mode_options.sort()
-        assert val in trx_mode_options, "trx_mode must be one of: " + str(trx_mode_options)
-        super().__setitem__("trx_mode", val)
+        op_mode_options = list(op_mode_lut.keys())
+        op_mode_options.sort()
+        assert val in op_mode_options, "op_mode must be one of: " + str(op_mode_options)
+        super().__setitem__("op_mode", val)
 
 
     def _validate_bandwidth(self, val):
@@ -213,9 +204,23 @@ class SX127xLoraSettings(SX127xSettings):
         super().__setitem__("sync_word", val)
 
 
+    def _validate_tx_base_ptr(self, val):
+        """Validates and sets tx_base_ptr.
+        """
+        assert 0 <= val <= 255, "tx_base_ptr must be within the range 0 .. 255, inclusive"
+        super().__setitem__("tx_base_ptr", val)
+
+
+    def _validate_rx_base_ptr(self, val):
+        """Validates and sets rx_base_ptr.
+        """
+        assert 0 <= val <= 255, "rx_base_ptr must be within the range 0 .. 255, inclusive"
+        super().__setitem__("rx_base_ptr", val)
+
+
     # The names of LoRa modem settings handled by this container class
     validate_and_set = {
-        "trx_mode": _validate_trx_mode,
+        "op_mode": _validate_op_mode,
         "bandwidth": _validate_bandwidth,
         "code_rate": _validate_code_rate,
         "implct_hdr_mode": _validate_implct_hdr_mode,
@@ -227,6 +232,8 @@ class SX127xLoraSettings(SX127xSettings):
         "en_ldr": _validate_en_ldr,
         "agc_auto": _validate_agc_auto,
         "sync_word": _validate_sync_word,
+        "tx_base_ptr": _validate_tx_base_ptr,
+        "rx_base_ptr": _validate_rx_base_ptr,
     }
 
 
@@ -238,6 +245,6 @@ if __name__ == "__main__":
     l = SX127xLoraSettings()
     #l["sync_word"] = 500
     l["bandwidth"] = 125000
-    l["trx_mode"] = "stdby"
+    l["op_mode"] = "stdby"
 
     print(l)

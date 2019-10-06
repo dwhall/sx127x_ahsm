@@ -15,8 +15,8 @@ import time
 
 import farc
 
-from . import phy_stngs
 from . import phy_sx127x_spi
+
 
 class SX127xSpiAhsm(farc.Ahsm):
     # Maximum amount of time to perform blocking sleep (seconds).
@@ -28,13 +28,19 @@ class SX127xSpiAhsm(farc.Ahsm):
     # to allow other nodes to enable their receiver
     TX_MARGIN = 0.005 # secs
 
+
+    def __init__(self, spi_stngs, modulxn_stngs):  # TODO? modem_stngs, rf_stngs, modulxn_stngs ):
+        super().__init__()
+        self.spi_stngs = spi_stngs
+        self.modulxn_stngs = modulxn_stngs
+
+
     @farc.Hsm.state
     def _initial(me, event):
         """Pseudostate: SX127xSpiAhsm:_initial
         """
         # self-signaling
         farc.Signal.register("_ALWAYS")
-        farc.Signal.register("_DEFAULT_CFG")
 
         # Outgoing
         farc.Signal.register("PHY_RXD_DATA")
@@ -57,8 +63,6 @@ class SX127xSpiAhsm(farc.Ahsm):
         farc.Framework.subscribe("PHY_DIO4", me)
         farc.Framework.subscribe("PHY_DIO5", me)
 
-        me.sx127x = phy_sx127x_spi.SX127xSpi()
-
         # A time event used for setting timeouts
         me.tm_evt = farc.TimeEvent("_PHY_SPI_TMOUT")
 
@@ -68,33 +72,29 @@ class SX127xSpiAhsm(farc.Ahsm):
     @farc.Hsm.state
     def _initializing(me, event):
         """State: SX127xSpiAhsm:_initializing
-        Reads SX127x regs and transitions to
-        the _idling or sleeping state.
-        If SPI cannot talk to a SX127x,
-        remains in _initializing state
+        Opens, verifies and inits the SPI driver.
+        Transitions to the _idling state if all is good;
+        otherwise transitions to the _exiting state
+        so the SPI driver is closed.
         """
         sig = event.signal
         if sig == farc.Signal.ENTRY:
+            me.sx127x = phy_sx127x_spi.SX127xSpi(me.spi_stngs, me.modulxn_stngs)
             if me.sx127x.check_chip_ver():
-                me.sx127x.get_dio()
-                me.sx127x.get_rf_freq()
-                me.sx127x.set_op_mode('stdby')
-                me.postFIFO(farc.Event(farc.Signal._DEFAULT_CFG, None))
+                me.sx127x.init()
+                me.sx127x.set_pwr_cfg(boost=True)
+                me.postFIFO(farc.Event(farc.Signal._ALWAYS, True))
             else:
                 logging.info("_initializing: no SX127x or SPI")
-                me.tran(me, SX127xSpiAhsm._exiting)
-
-            return me.handled(me, event)
-
-        elif sig == farc.Signal._DEFAULT_CFG:
-            me.sx127x.set_lora_settings(phy_stngs.default_sx127x_lora_stngs)
-            me.sx127x.set_pwr_cfg(boost=True)
-            me.postFIFO(farc.Event(farc.Signal._ALWAYS, None))
+                me.postFIFO(farc.Event(farc.Signal._ALWAYS, False))
             return me.handled(me, event)
 
         elif sig == farc.Signal._ALWAYS:
-            # TODO: if lora and stdby: trans(_idling) else: trans(sleeping)
-            return me.tran(me, SX127xSpiAhsm._idling)
+            if event.value:
+                st = SX127xSpiAhsm._idling
+            else:
+                st = SX127xSpiAhsm._exiting
+            return me.tran(me, st)
 
         return me.super(me, me.top)
 
@@ -141,7 +141,7 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.handled(me, event)
 
         elif sig == farc.Signal.PHY_STDBY:
-            me.sx127x.set_op_mode("stdby")
+            me.sx127x.set_lora_op_mode("stdby")
             return me.tran(me, me._idling)
 
         return me.super(me, me.top)
@@ -195,9 +195,9 @@ class SX127xSpiAhsm(farc.Ahsm):
         if sig == farc.Signal.ENTRY:
             me.hdr_time = 0
             if me.rx_time < 0:
-                me.sx127x.set_op_mode("rxcont")
+                me.sx127x.set_lora_op_mode("rxcont")
             else:
-                me.sx127x.set_op_mode("rxonce")
+                me.sx127x.set_lora_op_mode("rxonce")
             return me.handled(me, event)
 
         elif sig == farc.Signal.PHY_DIO0: # RX_DONE
@@ -228,7 +228,7 @@ class SX127xSpiAhsm(farc.Ahsm):
         # cancel the receive and do the Transmit
         elif sig == farc.Signal.PHY_TRANSMIT:
             if me.hdr_time == 0:
-                me.sx127x.set_op_mode("stdby")
+                me.sx127x.set_lora_op_mode("stdby")
                 me.tx_time = event.value[0]
                 me.tx_freq = event.value[1]
                 me.tx_data = event.value[2]
@@ -286,7 +286,7 @@ class SX127xSpiAhsm(farc.Ahsm):
         sig = event.signal
         if sig == farc.Signal.ENTRY:
             logging.info("tx             %f", farc.Framework._event_loop.time())
-            me.sx127x.set_op_mode("tx")
+            me.sx127x.set_lora_op_mode("tx")
             me.tm_evt.postIn(me, 1.0) # TODO: make time scale with datarate
             return me.handled(me, event)
 
@@ -295,7 +295,7 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.tran(me, SX127xSpiAhsm._idling)
 
         elif sig == farc.Signal._PHY_SPI_TMOUT: # software timeout
-            me.sx127x.set_op_mode("stdby")
+            me.sx127x.set_lora_op_mode("stdby")
             return me.tran(me, SX127xSpiAhsm._idling)
 
         return me.super(me, me._working)
@@ -308,6 +308,7 @@ class SX127xSpiAhsm(farc.Ahsm):
         sig = event.signal
         if sig == farc.Signal.ENTRY:
             logging.info("_exiting")
+            me.sx127x.close()
             return me.handled(me, event)
 
         return me.super(me, me.top)
