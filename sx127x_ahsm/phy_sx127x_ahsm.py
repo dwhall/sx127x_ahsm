@@ -180,15 +180,15 @@ class SX127xSpiAhsm(farc.Ahsm):
                 tiny_sleep = me.rx_time - farc.Framework._event_loop.time()
                 if 0.0 < tiny_sleep < SX127xSpiAhsm.MAX_BLOCKING_TIME:
                     time.sleep(tiny_sleep)
-            return me.tran(me, SX127xSpiAhsm._receiving)
+            return me.tran(me, SX127xSpiAhsm._listening)
 
         return me.super(me, me._idling)
 
 
     @farc.Hsm.state
-    def _receiving(me, event):
-        """State SX127xSpiAhsm:_working:_receiving
-        If the rx_time is less than zero, receive continuously;
+    def _listening(me, event):
+        """State SX127xSpiAhsm:_working:_listening
+        If the rx_time is less than zero, listen continuously;
         the caller must establish a way to end the continuous mode.
         """
         sig = event.signal
@@ -203,10 +203,9 @@ class SX127xSpiAhsm(farc.Ahsm):
         elif sig == farc.Signal.PHY_DIO0: # RX_DONE
             # The ValidHeader time is closer to start of rx'd pkt
             # than RX_DONE's event time
-            rxd_time = me.hdr_time
             if me.sx127x.check_lora_rx_flags():
                 payld, rssi, snr = me.sx127x.get_lora_rxd()
-                pkt_data = (rxd_time, payld, rssi, snr)
+                pkt_data = (me.hdr_time, payld, rssi, snr)
                 farc.Framework.publish(farc.Event(farc.Signal.PHY_RXD_DATA, pkt_data))
             else:
                 # TODO: crc error stats
@@ -221,18 +220,34 @@ class SX127xSpiAhsm(farc.Ahsm):
         elif sig == farc.Signal.PHY_DIO3: # ValidHeader
             me.hdr_time = event.value
             me.sx127x.clear_lora_irqs(phy_sx127x_spi.IRQFLAGS_VALIDHEADER_MASK)
-            return me.handled(me, event)
+            return me.tran(me, SX127xSpiAhsm._receiving)
 
-        # If we are in Receiving but haven't received a header yet
+        # We haven't received anything yet
         # and a request to Transmit arrives,
-        # cancel the receive and do the Transmit
+        # cancel the listening and go do the Transmit
         elif sig == farc.Signal.PHY_TRANSMIT:
-            if me.hdr_time == 0:
-                me.sx127x.set_lora_op_mode("stdby")
-                me.tx_time = event.value[0]
-                me.tx_freq = event.value[1]
-                me.tx_data = event.value[2]
-                return me.tran(me, me._tx_prepping)
+            me.sx127x.set_lora_op_mode("stdby")
+            me.tx_time = event.value[0]
+            me.tx_freq = event.value[1]
+            me.tx_data = event.value[2]
+            return me.tran(me, me._tx_prepping)
+
+        return me.super(me, me._working)
+
+
+    @farc.Hsm.state
+    def _receiving(me, event):
+        """State SX127xSpiAhsm:_working:_listening:_receiving
+        NOTE: This state should not be confused with
+        the MAC layer state of the same name
+        """
+        sig = event.signal
+        if sig == farc.Signal.ENTRY:
+            pass
+
+        elif sig == farc.Signal.PHY_TRANSMIT:
+            # TODO: put the pkt in the tx queue
+            pass
 
         return me.super(me, me._working)
 
