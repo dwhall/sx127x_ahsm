@@ -1,3 +1,6 @@
+# TODO: pc issues SPI cmds to MCU via uart:
+#    uart_path = "/dev/tty.usbmodemFA133"
+
 class SpiDev(object):
     def close(self,): pass
     def open(self, port, cs): pass
