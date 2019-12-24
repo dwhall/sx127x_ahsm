@@ -44,6 +44,7 @@ class SX127xSpiAhsm(farc.Ahsm):
 
         # Outgoing
         farc.Signal.register("PHY_RXD_DATA")
+        farc.Signal.register("PHY_TX_DONE")
 
         # Incoming
         farc.Signal.register("PHY_STDBY")
@@ -312,6 +313,10 @@ class SX127xSpiAhsm(farc.Ahsm):
         elif sig == farc.Signal._PHY_SPI_TMOUT: # software timeout
             me.sx127x.set_lora_op_mode("stdby")
             return me.tran(me, SX127xSpiAhsm._idling)
+
+        elif sig == farc.Signal.EXIT:
+            farc.Framework.publish(farc.Event(farc.Signal.PHY_TX_DONE, None))
+            return me.handled(me, event)
 
         return me.super(me, me._working)
 
