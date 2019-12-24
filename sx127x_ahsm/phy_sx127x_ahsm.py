@@ -29,10 +29,10 @@ class SX127xSpiAhsm(farc.Ahsm):
     TX_MARGIN = 0.005 # secs
 
 
-    def __init__(self, spi_stngs, modulxn_stngs):  # TODO? modem_stngs, rf_stngs, modulxn_stngs ):
+    def __init__(self, spi_stngs, dflt_modlxn_stngs):
         super().__init__()
         self.spi_stngs = spi_stngs
-        self.modulxn_stngs = modulxn_stngs
+        self.dflt_modlxn_stngs = dflt_modlxn_stngs
 
 
     @farc.Hsm.state
@@ -80,22 +80,23 @@ class SX127xSpiAhsm(farc.Ahsm):
         """
         sig = event.signal
         if sig == farc.Signal.ENTRY:
-            me.sx127x = phy_sx127x_spi.SX127xSpi(me.spi_stngs, me.modulxn_stngs)
-            if me.sx127x.check_chip_ver():
-                me.sx127x.init()
-                me.sx127x.set_pwr_cfg(boost=True)
-                me.postFIFO(farc.Event(farc.Signal._ALWAYS, True))
-            else:
-                logging.info("_initializing: no SX127x or SPI")
-                me.postFIFO(farc.Event(farc.Signal._ALWAYS, False))
+            me.sx127x = phy_sx127x_spi.SX127xSpi(me.spi_stngs)
+            me.tm_evt.postIn(me, 0.1)
             return me.handled(me, event)
 
-        elif sig == farc.Signal._ALWAYS:
-            if event.value:
-                st = SX127xSpiAhsm._idling
-            else:
-                st = SX127xSpiAhsm._exiting
-            return me.tran(me, st)
+        elif sig == farc.Signal._PHY_SPI_TMOUT:
+            if me.sx127x.check_chip_ver():
+                me.sx127x.init(me.dflt_modlxn_stngs)
+                me.sx127x.set_pwr_cfg(boost=True)
+                return me.tran(me, SX127xSpiAhsm._idling)
+
+            logging.info("_initializing: no SX127x or SPI")
+            me.tm_evt.postIn(me, 1.0)
+            return me.handled(me, event)
+
+        elif sig == farc.Signal.EXIT:
+            me.tm_evt.disarm()
+            return me.handled(me, event)
 
         return me.super(me, me.top)
 
@@ -307,7 +308,6 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.handled(me, event)
 
         elif sig == farc.Signal.PHY_DIO0: # TX_DONE
-            me.tm_evt.disarm()
             return me.tran(me, SX127xSpiAhsm._idling)
 
         elif sig == farc.Signal._PHY_SPI_TMOUT: # software timeout
@@ -315,6 +315,7 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.tran(me, SX127xSpiAhsm._idling)
 
         elif sig == farc.Signal.EXIT:
+            me.tm_evt.disarm()
             farc.Framework.publish(farc.Event(farc.Signal.PHY_TX_DONE, None))
             return me.handled(me, event)
 

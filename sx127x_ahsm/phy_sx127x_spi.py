@@ -74,10 +74,9 @@ class SX127xSpi(object):
     """Offers methods that drive the SPI bus to control the Semtech SX127x.
     """
 
-    def __init__(self, spi_stngs, modulxn_stngs): # TODO? modem_stngs, rf_stngs, modulxn_stngs ):
+    def __init__(self, spi_stngs):
         """Validates the given SPI settings and saves them.
         Initializes the SPI bus with the given port,CS and clock.
-        Stores the other given settings.
         """
         # Validate arguments, open and configure SPI peripheral
         assert spi_stngs[0] in (0,1), "Not a valid SPI port index"
@@ -87,12 +86,6 @@ class SX127xSpi(object):
         self.spi.open(spi_stngs[0], spi_stngs[1])
         self.spi.max_speed_hz = spi_stngs[2]
         self.spi.mode = 0 # phase=0 and polarity=0
-
-        # Save the settings
-#        self.modem_stngs = modem_stngs
-#        self.rf_stngs = rf_stngs
-        if isinstance(modulxn_stngs, phy_sx127x_stngs.SX127xLoraSettings):
-            self.lora_stngs = modulxn_stngs
 
 
 ## SPI helper methods
@@ -144,13 +137,15 @@ class SX127xSpi(object):
             return False
 
 
-    def init(self,):
+    def init(self, dflt_modlxn_stngs):
         """Gets a few SX127x registers in order
         to initialize some required state variables.
         Leaves the SX127x in Standby mode.
         """
         self.get_dio()
         self.get_rf_freq()
+        # TODO: if dflt is lora:
+        self.set_lora_settings(dflt_modlxn_stngs)
         self.set_lora_op_mode('stdby')
 
 
@@ -415,7 +410,7 @@ class SX127xSpi(object):
         """
         assert isinstance(lora_stngs, phy_sx127x_stngs.SX127xLoraSettings)
 
-        # Save lora_stngs (in case it's different from the one given in __init__())
+        # Save lora_stngs (used by other set_* methods)
         self.lora_stngs = lora_stngs
 
         # Transition to sleep mode to write configuration
@@ -425,10 +420,10 @@ class SX127xSpi(object):
 
         # Concat bandwidth | code_rate | implicit header mode
         reg_cfg1 = lora_stngs["_bandwidth_idx"] << 4 \
-            | lora_stngs["code_rate_idx"] << 1 \
+            | lora_stngs["_code_rate_idx"] << 1 \
             | int(lora_stngs["implct_hdr_mode"])
         # Concat spread_factor | tx_cont | upper 2 bits of symbol count
-        reg_cfg2 = lora_stngs["spread_factor_idx"] << 4 \
+        reg_cfg2 = lora_stngs["_spread_factor_idx"] << 4 \
             | int(lora_stngs["tx_cont"]) << 3 \
             | int(lora_stngs["en_crc"]) << 2 \
             | lora_stngs["symbol_count"] >> 8
@@ -590,7 +585,7 @@ class SX127xSpi(object):
         """
         assert type(secs) in (int, float)
         assert secs > 0
-        symbol_rate = self.lora_stngs["bandwidth"] / 2**self.lora_stngs["spread_factor_idx"]
+        symbol_rate = self.lora_stngs["bandwidth"] / 2**self.lora_stngs["_spread_factor_idx"]
         symbol_count = round(secs * symbol_rate)
         self.set_lora_symbol_count(symbol_count)
 
