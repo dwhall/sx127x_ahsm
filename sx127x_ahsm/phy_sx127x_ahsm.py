@@ -203,8 +203,6 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.handled(me, event)
 
         elif sig == farc.Signal.PHY_DIO0: # RX_DONE
-            # The ValidHeader time is closer to start of rx'd pkt
-            # than RX_DONE's event time
             if me.sx127x.check_lora_rx_flags():
                 payld, rssi, snr = me.sx127x.get_lora_rxd()
                 pkt_data = (me.hdr_time, payld, rssi, snr)
@@ -251,7 +249,7 @@ class SX127xSpiAhsm(farc.Ahsm):
             # TODO: put the pkt in the tx queue
             pass
 
-        return me.super(me, me._working)
+        return me.super(me, me._listening)
 
 
 #### Transmit chain
