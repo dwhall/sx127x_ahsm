@@ -51,9 +51,18 @@ class SX127xModemSettings(SX127xSettings):
         super().__setitem__("lf_mode", val)
 
 
+    def _validate_modulation_stngs(self, val):
+        """Validates and sets modulation_stngs
+        """
+        assert isinstance(val, SX127xLoraSettings)
+        #TODO: of isinstance(val, SX127xFskSettings)
+        super().__setitem__("modulation_stngs", val)
+
+
     validate_and_set = {
         "modulation": _validate_modulation,
         "lf_mode": _validate_lf_mode,
+        "modulation_stngs": _validate_modulation_stngs,
     }
 
 
@@ -73,22 +82,7 @@ class SX127xLoraSettings(SX127xSettings):
     def _validate_op_mode(self, val):
         """Validates and sets transceiver mode.
         """
-        # NOTE: dict isn't needed here.  Could reduce to tuple
-        # TODO: See if there's a way to reduce dual maintenance with set_lora_op_mode()
-        op_mode_lut = {
-            "sleep": 0b000,
-            "stdby": 0b001,
-            "standby": 0b001, # repeat for convenience
-            "fstx": 0b010,
-            "tx": 0b011,
-            "fsrx": 0b100,
-            "rxcont": 0b101,
-            "rx": 0b110, # same as rxonce
-            "rxonce": 0b110, # repeat for convenience
-            "cad": 0b111,
-            }
-        op_mode_options = list(op_mode_lut.keys())
-        op_mode_options.sort()
+        op_mode_options = ( "sleep", "stdby", "fstx", "tx", "fsrx", "rxcont", "rx", "cad" )
         assert val in op_mode_options, "op_mode must be one of: " + str(op_mode_options)
         super().__setitem__("op_mode", val)
 

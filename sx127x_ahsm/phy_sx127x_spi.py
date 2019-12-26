@@ -137,16 +137,20 @@ class SX127xSpi(object):
             return False
 
 
-    def init(self, dflt_modlxn_stngs):
+    def init(self, dflt_modem_stngs):
         """Gets a few SX127x registers in order
         to initialize some required state variables.
         Leaves the SX127x in Standby mode.
         """
+        assert isinstance(dflt_modem_stngs, phy_sx127x_stngs.SX127xModemSettings)
+
+        self.set_op_mode("sleep")
         self.get_dio()
         self.get_rf_freq()
+        self.set_modem(dflt_modem_stngs)
         # TODO: if dflt is lora:
-        self.set_lora_settings(dflt_modlxn_stngs)
-        self.set_lora_op_mode('stdby')
+        self.set_lora_settings(dflt_modem_stngs["modulation_stngs"])
+        self.set_op_mode('stdby')
 
 
     def close(self,):
@@ -225,17 +229,17 @@ class SX127xSpi(object):
         TODO: Sets the modulation and LF or HF mode.
         """
         # must be in sleep mode to change the modulation
-        self.set_lora_op_mode("sleep")
-        d = self._read(REG_OP_MODE)
+        d = self._read(REG_OP_MODE)[0]
         d &= 0b00011111
         if modem_stngs["modulation"] == "lora":
             d |= 0b10000000
         # elif modem_stngs["modulation"] == "fsk" is three 0s (nothing to do)
         elif modem_stngs["modulation"] == "ook":
             d |= 0b00100000
-        # TODO: apply lf_mode
+
+        if modem_stngs["lf_mode"]:
+            d |= 0b00001000
         self._write(REG_OP_MODE, d)
-        self.set_lora_op_mode("stdby")
 
 
 ## SX127x RF block methods
@@ -416,7 +420,7 @@ class SX127xSpi(object):
         # Transition to sleep mode to write configuration
         mode_bkup = self.get_op_mode()
         if mode_bkup != "sleep":
-            self.set_lora_op_mode("sleep")
+            self.set_op_mode("sleep")
 
         # Concat bandwidth | code_rate | implicit header mode
         reg_cfg1 = lora_stngs["_bandwidth_idx"] << 4 \
@@ -445,7 +449,7 @@ class SX127xSpi(object):
 
         # Restore previous operating mode
         if mode_bkup != "sleep":
-            self.set_lora_op_mode(mode_bkup)
+            self.set_op_mode(mode_bkup)
 
 
     def set_fifo(self, data, offset=None):
@@ -496,11 +500,10 @@ class SX127xSpi(object):
         self._write(REG_CARRIER_FREQ, d)
 
 
-    def set_lora_op_mode(self, mode="stdby"):
+    def set_op_mode(self, mode="stdby"):
         """Sets the device mode in the operating mode register to one of
         these strings: sleep, stdby, fstx, tx, fsrx, rxcont, rxonce, cad
         """
-        self.lora_stngs["op_mode"] = mode
         mode_lut = {"sleep": 0b000,
                     "stdby": 0b001,
                     "standby": 0b001, # repeat for convenience

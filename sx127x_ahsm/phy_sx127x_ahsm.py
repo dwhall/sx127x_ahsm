@@ -29,10 +29,10 @@ class SX127xSpiAhsm(farc.Ahsm):
     TX_MARGIN = 0.005 # secs
 
 
-    def __init__(self, spi_stngs, dflt_modlxn_stngs):
+    def __init__(self, spi_stngs, dflt_modem_stngs):
         super().__init__()
         self.spi_stngs = spi_stngs
-        self.dflt_modlxn_stngs = dflt_modlxn_stngs
+        self.dflt_modem_stngs = dflt_modem_stngs
 
 
     @farc.Hsm.state
@@ -81,12 +81,12 @@ class SX127xSpiAhsm(farc.Ahsm):
         sig = event.signal
         if sig == farc.Signal.ENTRY:
             me.sx127x = phy_sx127x_spi.SX127xSpi(me.spi_stngs)
-            me.tm_evt.postIn(me, 0.1)
+            me.tm_evt.postIn(me, 0.0)
             return me.handled(me, event)
 
         elif sig == farc.Signal._PHY_SPI_TMOUT:
             if me.sx127x.check_chip_ver():
-                me.sx127x.init(me.dflt_modlxn_stngs)
+                me.sx127x.init(me.dflt_modem_stngs)
                 me.sx127x.set_pwr_cfg(boost=True)
                 return me.tran(me, SX127xSpiAhsm._idling)
 
@@ -143,7 +143,7 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.handled(me, event)
 
         elif sig == farc.Signal.PHY_STDBY:
-            me.sx127x.set_lora_op_mode("stdby")
+            me.sx127x.set_op_mode("stdby")
             return me.tran(me, me._idling)
 
         return me.super(me, me.top)
@@ -197,9 +197,9 @@ class SX127xSpiAhsm(farc.Ahsm):
         if sig == farc.Signal.ENTRY:
             me.hdr_time = 0
             if me.rx_time < 0:
-                me.sx127x.set_lora_op_mode("rxcont")
+                me.sx127x.set_op_mode("rxcont")
             else:
-                me.sx127x.set_lora_op_mode("rxonce")
+                me.sx127x.set_op_mode("rxonce")
             return me.handled(me, event)
 
         elif sig == farc.Signal.PHY_DIO0: # RX_DONE
@@ -228,7 +228,7 @@ class SX127xSpiAhsm(farc.Ahsm):
         # and a request to Transmit arrives,
         # cancel the listening and go do the Transmit
         elif sig == farc.Signal.PHY_TRANSMIT:
-            me.sx127x.set_lora_op_mode("stdby")
+            me.sx127x.set_op_mode("stdby")
             me.tx_time = event.value[0]
             me.tx_freq = event.value[1]
             me.tx_data = event.value[2]
@@ -303,7 +303,7 @@ class SX127xSpiAhsm(farc.Ahsm):
         sig = event.signal
         if sig == farc.Signal.ENTRY:
             logging.info("tx             %f", farc.Framework._event_loop.time())
-            me.sx127x.set_lora_op_mode("tx")
+            me.sx127x.set_op_mode("tx")
             me.tm_evt.postIn(me, 1.0) # TODO: make time scale with datarate
             return me.handled(me, event)
 
@@ -311,7 +311,7 @@ class SX127xSpiAhsm(farc.Ahsm):
             return me.tran(me, SX127xSpiAhsm._idling)
 
         elif sig == farc.Signal._PHY_SPI_TMOUT: # software timeout
-            me.sx127x.set_lora_op_mode("stdby")
+            me.sx127x.set_op_mode("stdby")
             return me.tran(me, SX127xSpiAhsm._idling)
 
         elif sig == farc.Signal.EXIT:
