@@ -265,10 +265,10 @@ class SX127xSpiAhsm(farc.Ahsm):
             me.sx127x.enable_lora_irqs(phy_sx127x_spi.IRQFLAGS_TXDONE_MASK)
             me.sx127x.clear_lora_irqs(phy_sx127x_spi.IRQFLAGS_TXDONE_MASK)
 
-            # Prepare DIO0 to cause TxDone interrupt
+            # Set DIO, TX/FIFO_PTR, FIFO and freq in prep for transmit
             me.sx127x.set_dio_mapping(dio0=1)
+            me.sx127x.set_lora_fifo_ptr()
             me.sx127x.set_tx_data(me.tx_data)
-
             me.sx127x.set_tx_freq(me.tx_freq)
 
             # Reminder pattern

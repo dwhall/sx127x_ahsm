@@ -452,33 +452,23 @@ class SX127xSpi(object):
             self.set_op_mode(mode_bkup)
 
 
-    def set_fifo(self, data, offset=None):
-        """Writes the data to the FIFO.
-        Data is either an int or a sequence of bytes
-        If the offset is given, data is written there;
-        otherwise, data is written at the current FIFO pointer.
+    def set_lora_fifo_ptr(self, offset=None):
+        """Sets the FIFO_PTR and TX_BASE_PTR regs
         """
-        if offset is not None: #TODO: and modem is "lora"
-            self.set_lora_fifo_ptr(offset)
-
-        self._write(REG_FIFO, data)
-
-
-    def set_lora_fifo_ptr(self, offset=0):
-        """Sets the FIFO address pointer.
-        """
+        if offset is None:
+            offset = self.lora_stngs["tx_base_ptr"]
         assert type(offset) == int
         assert 0 <= offset <= 255
-        self._write(REG_FIFO_PTR, offset)
+        self._write(REG_FIFO_PTR, [offset, offset])
 
 
     def set_tx_data(self, data):
-        """Sets the FIFO and TX_BASE pointers
+        """Sets the PAYLOD_LEN reg
         and writes the data to the FIFO
         in preparation for transmit.
         """
-        self._write(REG_FIFO_PTR, [self.lora_stngs["tx_base_ptr"], self.lora_stngs["tx_base_ptr"]])
-        self.set_fifo(data)
+        self._write(REG_PAYLD_LEN, len(data))
+        self._write(REG_FIFO, data)
 
 
     def set_tx_freq(self, freq):
