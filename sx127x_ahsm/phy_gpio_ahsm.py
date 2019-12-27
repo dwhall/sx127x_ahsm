@@ -57,10 +57,6 @@ class GpioAhsm(farc.Ahsm):
         elif sig == farc.Signal.SIGTERM:
             return me.tran(me, me._exiting)
 
-        elif sig == farc.Signal.EXIT:
-            GPIO.cleanup()
-            return me.handled(me, event)
-
         return me.super(me, me.top)
 
 
@@ -74,6 +70,7 @@ class GpioAhsm(farc.Ahsm):
         if sig == farc.Signal.ENTRY:
             for pin_nmbr in self._out_pins:
                 GPIO.setup(pin_nmbr, GPIO.IN)
+            GPIO.cleanup()
             return me.handled(me, event)
 
         return me.super(me, me.top)

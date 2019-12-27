@@ -170,7 +170,7 @@ class SX127xSpiAhsm(farc.Ahsm):
 
             # Prepare DIO0,1 to cause RxDone, RxTimeout, ValidHeader interrupts
             me.sx127x.set_dio_mapping(dio0=0, dio1=0, dio3=1)
-            me.sx127x.set_lora_rx_fifo()
+            me.sx127x.set_lora_rx_fifo(me.dflt_modem_stngs["modulation_stngs"]["rx_base_ptr"])
             me.sx127x.set_lora_rx_freq(me.rx_freq)
 
             # Reminder pattern

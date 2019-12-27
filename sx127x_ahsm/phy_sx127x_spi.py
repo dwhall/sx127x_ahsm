@@ -430,7 +430,7 @@ class SX127xSpi(object):
         reg_cfg2 = lora_stngs["_spread_factor_idx"] << 4 \
             | int(lora_stngs["tx_cont"]) << 3 \
             | int(lora_stngs["en_crc"]) << 2 \
-            | lora_stngs["symbol_count"] >> 8
+            | ((lora_stngs["symbol_count"] >> 8) & 0b011)
         # Lower 8 bits of symbol count go in reg(0x1F)
         reg_sym_to = lora_stngs["symbol_count"] & 0xff
         # Write 3 contiguous regs at once
