@@ -13,7 +13,6 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/dwhall/sx127x_ahsm",
     packages=setuptools.find_packages(),
-    scripts = ["scripts/heymac_gen_identity.py"],
     classifiers=[
         "Programming Language :: Python :: 3.4",
         "Programming Language :: Python :: 3.5",
