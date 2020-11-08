@@ -40,28 +40,28 @@ class GpioAhsm(farc.Ahsm):
 
 
     @farc.Hsm.state
-    def _initial(me, event):
+    def _initial(self, event):
         """Pseudostate: GpioAhsm:_initial
         """
-        return me.tran(me, GpioAhsm._running)
+        return self.tran(GpioAhsm._running)
 
 
     @farc.Hsm.state
-    def _running(me, event):
+    def _running(self, event):
         """State: GpioAhsm:_running
         """
         sig = event.signal
         if sig == farc.Signal.ENTRY:
-            return me.handled(me, event)
+            return self.handled(event)
 
         elif sig == farc.Signal.SIGTERM:
-            return me.tran(me, me._exiting)
+            return self.tran(self._exiting)
 
-        return me.super(me, me.top)
+        return self.super(self.top)
 
 
     @farc.Hsm.state
-    def _exiting(me, event):
+    def _exiting(self, event):
         """State: GpioAhsm:_exiting
         For each pin registered as an output,
         sets the pin to an input (a safe condition).
@@ -71,9 +71,9 @@ class GpioAhsm(farc.Ahsm):
             for pin_nmbr in self._out_pins:
                 GPIO.setup(pin_nmbr, GPIO.IN)
             GPIO.cleanup()
-            return me.handled(me, event)
+            return self.handled(event)
 
-        return me.super(me, me.top)
+        return self.super(self.top)
 
 
     def register_pin_in(self, pin_nmbr, pin_edge, sig_name):

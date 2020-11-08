@@ -36,7 +36,7 @@ class SX127xSpiAhsm(farc.Ahsm):
 
 
     @farc.Hsm.state
-    def _initial(me, event):
+    def _initial(self, event):
         """Pseudostate: SX127xSpiAhsm:_initial
         """
         # self-signaling
@@ -51,27 +51,27 @@ class SX127xSpiAhsm(farc.Ahsm):
         farc.Signal.register("PHY_SET_LORA")
 
         # Incoming from higher layer
-        farc.Framework.subscribe("PHY_SLEEP", me)
-        farc.Framework.subscribe("PHY_CAD", me)
-        farc.Framework.subscribe("PHY_RECEIVE", me)
-        farc.Framework.subscribe("PHY_TRANSMIT", me)
+        farc.Framework.subscribe("PHY_SLEEP", self)
+        farc.Framework.subscribe("PHY_CAD", self)
+        farc.Framework.subscribe("PHY_RECEIVE", self)
+        farc.Framework.subscribe("PHY_TRANSMIT", self)
 
         # Incoming from GPIO (SX127x's DIO pins)
-        farc.Framework.subscribe("PHY_DIO0", me)
-        farc.Framework.subscribe("PHY_DIO1", me)
-        farc.Framework.subscribe("PHY_DIO2", me)
-        farc.Framework.subscribe("PHY_DIO3", me)
-        farc.Framework.subscribe("PHY_DIO4", me)
-        farc.Framework.subscribe("PHY_DIO5", me)
+        farc.Framework.subscribe("PHY_DIO0", self)
+        farc.Framework.subscribe("PHY_DIO1", self)
+        farc.Framework.subscribe("PHY_DIO2", self)
+        farc.Framework.subscribe("PHY_DIO3", self)
+        farc.Framework.subscribe("PHY_DIO4", self)
+        farc.Framework.subscribe("PHY_DIO5", self)
 
         # A time event used for setting timeouts
-        me.tm_evt = farc.TimeEvent("_PHY_SPI_TMOUT")
+        self.tm_evt = farc.TimeEvent("_PHY_SPI_TMOUT")
 
-        return me.tran(me, SX127xSpiAhsm._initializing)
+        return self.tran(SX127xSpiAhsm._initializing)
 
 
     @farc.Hsm.state
-    def _initializing(me, event):
+    def _initializing(self, event):
         """State: SX127xSpiAhsm:_initializing
         Opens, verifies and inits the SPI driver.
         Transitions to the _idling state if all is good;
@@ -80,78 +80,78 @@ class SX127xSpiAhsm(farc.Ahsm):
         """
         sig = event.signal
         if sig == farc.Signal.ENTRY:
-            me.sx127x = phy_sx127x_spi.SX127xSpi(me.spi_stngs)
-            me.tm_evt.postIn(me, 0.0)
-            return me.handled(me, event)
+            self.sx127x = phy_sx127x_spi.SX127xSpi(self.spi_stngs)
+            self.tm_evt.post_in(self, 0.0)
+            return self.handled(event)
 
         elif sig == farc.Signal._PHY_SPI_TMOUT:
-            if me.sx127x.check_chip_ver():
-                me.sx127x.init(me.dflt_modem_stngs)
-                me.sx127x.set_pwr_cfg(boost=True)
-                return me.tran(me, SX127xSpiAhsm._idling)
+            if self.sx127x.check_chip_ver():
+                self.sx127x.init(self.dflt_modem_stngs)
+                self.sx127x.set_pwr_cfg(boost=True)
+                return self.tran(SX127xSpiAhsm._idling)
 
             logging.info("_initializing: no SX127x or SPI")
-            me.tm_evt.postIn(me, 1.0)
-            return me.handled(me, event)
+            self.tm_evt.post_in(self, 1.0)
+            return self.handled(event)
 
         elif sig == farc.Signal.EXIT:
-            me.tm_evt.disarm()
-            return me.handled(me, event)
+            self.tm_evt.disarm()
+            return self.handled(event)
 
-        return me.super(me, me.top)
+        return self.super(self.top)
 
 
     @farc.Hsm.state
-    def _idling(me, event):
+    def _idling(self, event):
         """State: SX127xSpiAhsm:_idling
         """
         sig = event.signal
         if sig == farc.Signal.ENTRY:
-            return me.handled(me, event)
+            return self.handled(event)
 
         elif sig == farc.Signal.PHY_SLEEP:
-            return me.tran(me, me.sleeping)
+            return self.tran(self.sleeping)
 
         elif sig == farc.Signal.PHY_SET_LORA:
             # TODO
-            return me.handled(me, event)
+            return self.handled(event)
 
         elif sig == farc.Signal.PHY_RECEIVE:
-            me.rx_time = event.value[0]
-            me.rx_freq = event.value[1]
-            return me.tran(me, me._rx_prepping)
+            self.rx_time = event.value[0]
+            self.rx_freq = event.value[1]
+            return self.tran(self._rx_prepping)
 
         elif sig == farc.Signal.PHY_TRANSMIT:
-            me.tx_time = event.value[0]
-            me.tx_freq = event.value[1]
-            me.tx_data = event.value[2]
-            return me.tran(me, me._tx_prepping)
+            self.tx_time = event.value[0]
+            self.tx_freq = event.value[1]
+            self.tx_data = event.value[2]
+            return self.tran(self._tx_prepping)
 
         elif sig == farc.Signal.PHY_CAD:
-            return me.tran(me, me.cad_ing)
+            return self.tran(self.cad_ing)
 
-        return me.super(me, me.top)
+        return self.super(self.top)
 
 
     @farc.Hsm.state
-    def _working(me, event):
+    def _working(self, event):
         """State SX127xSpiAhsm:_working
         This state provides a PHY_STDBY handler that returns the radio to stdby.
         """
         sig = event.signal
         if sig == farc.Signal.ENTRY:
-            return me.handled(me, event)
+            return self.handled(event)
 
         elif sig == farc.Signal.PHY_STDBY:
-            me.sx127x.set_op_mode("stdby")
-            return me.tran(me, me._idling)
+            self.sx127x.set_op_mode("stdby")
+            return self.tran(self._idling)
 
-        return me.super(me, me.top)
+        return self.super(self.top)
 
 
 #### Receive chain
     @farc.Hsm.state
-    def _rx_prepping(me, event):
+    def _rx_prepping(self, event):
         """State: SX127xSpiAhsm:_idling:_rx_prepping
         While still in radio's standby mode, get regs and FIFO ready for RX.
         If a positive rx_time is given, sleep (blocking) for a tiny amount.
@@ -162,81 +162,81 @@ class SX127xSpiAhsm(farc.Ahsm):
         if sig == farc.Signal.ENTRY:
 
             # Enable only the RX interrupts (disable all others)
-            me.sx127x.disable_lora_irqs()
-            me.sx127x.enable_lora_irqs(phy_sx127x_spi.IRQFLAGS_RXTIMEOUT_MASK
+            self.sx127x.disable_lora_irqs()
+            self.sx127x.enable_lora_irqs(phy_sx127x_spi.IRQFLAGS_RXTIMEOUT_MASK
                 | phy_sx127x_spi.IRQFLAGS_RXDONE_MASK
                 | phy_sx127x_spi.IRQFLAGS_PAYLOADCRCERROR_MASK
                 | phy_sx127x_spi.IRQFLAGS_VALIDHEADER_MASK)
 
             # Prepare DIO0,1 to cause RxDone, RxTimeout, ValidHeader interrupts
-            me.sx127x.set_dio_mapping(dio0=0, dio1=0, dio3=1)
-            me.sx127x.set_lora_rx_fifo(me.dflt_modem_stngs["modulation_stngs"]["rx_base_ptr"])
-            me.sx127x.set_lora_rx_freq(me.rx_freq)
+            self.sx127x.set_dio_mapping(dio0=0, dio1=0, dio3=1)
+            self.sx127x.set_lora_rx_fifo(self.dflt_modem_stngs["modulation_stngs"]["rx_base_ptr"])
+            self.sx127x.set_lora_rx_freq(self.rx_freq)
 
             # Reminder pattern
-            me.postFIFO(farc.Event(farc.Signal._ALWAYS, None))
-            return me.handled(me, event)
+            self.post_fifo(farc.Event(farc.Signal._ALWAYS, None))
+            return self.handled(event)
 
         elif sig == farc.Signal._ALWAYS:
-            if me.rx_time > 0:
-                tiny_sleep = me.rx_time - farc.Framework._event_loop.time()
+            if self.rx_time > 0:
+                tiny_sleep = self.rx_time - farc.Framework._event_loop.time()
                 if 0.0 < tiny_sleep < SX127xSpiAhsm.MAX_BLOCKING_TIME:
                     time.sleep(tiny_sleep)
-            return me.tran(me, SX127xSpiAhsm._listening)
+            return self.tran(SX127xSpiAhsm._listening)
 
-        return me.super(me, me._idling)
+        return self.super(self._idling)
 
 
     @farc.Hsm.state
-    def _listening(me, event):
+    def _listening(self, event):
         """State SX127xSpiAhsm:_working:_listening
         If the rx_time is less than zero, listen continuously;
         the caller must establish a way to end the continuous mode.
         """
         sig = event.signal
         if sig == farc.Signal.ENTRY:
-            me.hdr_time = 0
-            if me.rx_time < 0:
-                me.sx127x.set_op_mode("rxcont")
+            self.hdr_time = 0
+            if self.rx_time < 0:
+                self.sx127x.set_op_mode("rxcont")
             else:
-                me.sx127x.set_op_mode("rxonce")
-            return me.handled(me, event)
+                self.sx127x.set_op_mode("rxonce")
+            return self.handled(event)
 
         elif sig == farc.Signal.PHY_DIO0: # RX_DONE
-            if me.sx127x.check_lora_rx_flags():
-                payld, rssi, snr = me.sx127x.get_lora_rxd()
-                pkt_data = (me.hdr_time, payld, rssi, snr)
+            if self.sx127x.check_lora_rx_flags():
+                payld, rssi, snr = self.sx127x.get_lora_rxd()
+                pkt_data = (self.hdr_time, payld, rssi, snr)
                 farc.Framework.publish(farc.Event(farc.Signal.PHY_RXD_DATA, pkt_data))
             else:
                 # TODO: crc error stats
                 logging.info("rx CRC error")
 
-            return me.tran(me, SX127xSpiAhsm._idling)
+            return self.tran(SX127xSpiAhsm._idling)
 
         elif sig == farc.Signal.PHY_DIO1: # RX_TIMEOUT
-            me.sx127x.clear_lora_irqs(phy_sx127x_spi.IRQFLAGS_RXTIMEOUT_MASK)
-            return me.tran(me, SX127xSpiAhsm._idling)
+            self.sx127x.clear_lora_irqs(phy_sx127x_spi.IRQFLAGS_RXTIMEOUT_MASK)
+            return self.tran(SX127xSpiAhsm._idling)
 
         elif sig == farc.Signal.PHY_DIO3: # ValidHeader
-            me.hdr_time = event.value
-            me.sx127x.clear_lora_irqs(phy_sx127x_spi.IRQFLAGS_VALIDHEADER_MASK)
-            return me.tran(me, SX127xSpiAhsm._receiving)
+            self.hdr_time = event.value
+            self.sx127x.clear_lora_irqs(phy_sx127x_spi.IRQFLAGS_VALIDHEADER_MASK)
+            return self.tran(SX127xSpiAhsm._receiving)
 
         # We haven't received anything yet
         # and a request to Transmit arrives,
         # cancel the listening and go do the Transmit
         elif sig == farc.Signal.PHY_TRANSMIT:
-            me.sx127x.set_op_mode("stdby")
-            me.tx_time = event.value[0]
-            me.tx_freq = event.value[1]
-            me.tx_data = event.value[2]
-            return me.tran(me, me._tx_prepping)
+            self.sx127x.set_op_mode("stdby")
+            self.tx_time = event.value[0]
+            self.tx_freq = event.value[1]
+            self.tx_data = event.value[2]
+            return self.tran(self._tx_prepping)
 
-        return me.super(me, me._working)
+        return self.super(self._working)
 
 
     @farc.Hsm.state
-    def _receiving(me, event):
+    def _receiving(self, event):
         """State SX127xSpiAhsm:_working:_listening:_receiving
         NOTE: This state should not be confused with
         the MAC layer state of the same name
@@ -249,37 +249,37 @@ class SX127xSpiAhsm(farc.Ahsm):
             # TODO: put the pkt in the tx queue
             pass
 
-        return me.super(me, me._listening)
+        return self.super(self._listening)
 
 
 #### Transmit chain
     @farc.Hsm.state
-    def _tx_prepping(me, event):
+    def _tx_prepping(self, event):
         """State: SX127xSpiAhsm:_idling:_tx_prepping
         """
         sig = event.signal
         if sig == farc.Signal.ENTRY:
 
             # Enable only the TX interrupts (disable all others)
-            me.sx127x.disable_lora_irqs()
-            me.sx127x.enable_lora_irqs(phy_sx127x_spi.IRQFLAGS_TXDONE_MASK)
-            me.sx127x.clear_lora_irqs(phy_sx127x_spi.IRQFLAGS_TXDONE_MASK)
+            self.sx127x.disable_lora_irqs()
+            self.sx127x.enable_lora_irqs(phy_sx127x_spi.IRQFLAGS_TXDONE_MASK)
+            self.sx127x.clear_lora_irqs(phy_sx127x_spi.IRQFLAGS_TXDONE_MASK)
 
             # Set DIO, TX/FIFO_PTR, FIFO and freq in prep for transmit
-            me.sx127x.set_dio_mapping(dio0=1)
-            me.sx127x.set_lora_fifo_ptr()
-            me.sx127x.set_tx_data(me.tx_data)
-            me.sx127x.set_tx_freq(me.tx_freq)
+            self.sx127x.set_dio_mapping(dio0=1)
+            self.sx127x.set_lora_fifo_ptr()
+            self.sx127x.set_tx_data(self.tx_data)
+            self.sx127x.set_tx_freq(self.tx_freq)
 
             # Reminder pattern
-            me.postFIFO(farc.Event(farc.Signal._ALWAYS, None))
-            return me.handled(me, event)
+            self.post_fifo(farc.Event(farc.Signal._ALWAYS, None))
+            return self.handled(event)
 
         elif sig == farc.Signal._ALWAYS:
-            if me.tx_time > 0:
+            if self.tx_time > 0:
                 # Calculate precise sleep time and apply a TX margin
                 # to allow receivers time to get ready
-                tiny_sleep = me.tx_time - farc.Framework._event_loop.time()
+                tiny_sleep = self.tx_time - farc.Framework._event_loop.time()
                 tiny_sleep += SX127xSpiAhsm.TX_MARGIN
 
                 # If TX time has passed, don't sleep
@@ -289,45 +289,45 @@ class SX127xSpiAhsm(farc.Ahsm):
                     if tiny_sleep > SX127xSpiAhsm.MAX_BLOCKING_TIME:
                         tiny_sleep = SX127xSpiAhsm.MAX_BLOCKING_TIME
                     time.sleep(tiny_sleep)
-            return me.tran(me, SX127xSpiAhsm._transmitting)
+            return self.tran(SX127xSpiAhsm._transmitting)
 
-        return me.super(me, me._idling)
+        return self.super(self._idling)
 
 
     @farc.Hsm.state
-    def _transmitting(me, event):
+    def _transmitting(self, event):
         """State: SX127xSpiAhsm:_working:_transmitting
         """
         sig = event.signal
         if sig == farc.Signal.ENTRY:
             logging.info("tx             %f", farc.Framework._event_loop.time())
-            me.sx127x.set_op_mode("tx")
-            me.tm_evt.postIn(me, 1.0) # TODO: make time scale with datarate
-            return me.handled(me, event)
+            self.sx127x.set_op_mode("tx")
+            self.tm_evt.post_in(self, 1.0) # TODO: make time scale with datarate
+            return self.handled(event)
 
         elif sig == farc.Signal.PHY_DIO0: # TX_DONE
-            return me.tran(me, SX127xSpiAhsm._idling)
+            return self.tran(SX127xSpiAhsm._idling)
 
         elif sig == farc.Signal._PHY_SPI_TMOUT: # software timeout
-            me.sx127x.set_op_mode("stdby")
-            return me.tran(me, SX127xSpiAhsm._idling)
+            self.sx127x.set_op_mode("stdby")
+            return self.tran(SX127xSpiAhsm._idling)
 
         elif sig == farc.Signal.EXIT:
-            me.tm_evt.disarm()
+            self.tm_evt.disarm()
             farc.Framework.publish(farc.Event(farc.Signal.PHY_TX_DONE, None))
-            return me.handled(me, event)
+            return self.handled(event)
 
-        return me.super(me, me._working)
+        return self.super(self._working)
 
 
     @farc.Hsm.state
-    def _exiting(me, event):
+    def _exiting(self, event):
         """State: SX127xSpiAhsm:_exiting
         """
         sig = event.signal
         if sig == farc.Signal.ENTRY:
             logging.info("_exiting")
-            me.sx127x.close()
-            return me.handled(me, event)
+            self.sx127x.close()
+            return self.handled(event)
 
-        return me.super(me, me.top)
+        return self.super(self.top)
