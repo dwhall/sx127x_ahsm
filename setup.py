@@ -20,6 +20,9 @@ setuptools.setup(
         "Programming Language :: Python :: 3.7",
         "License :: OSI Approved :: MIT License",
 
+        # This project is deprected
+        "Development Status :: 7 - Inactive",
+
         # This project is designed to run on a Raspberry Pi
         # with a SX127X LoRa radio attached via the SPI bus
         "Operating System :: POSIX :: Linux",

@@ -1,3 +1,18 @@
+## This project is deprecated
+
+TL;DR: switching to [phy_sx127x](https://www.github.com/dwhall/phy_sx127x)
+
+This project was an exploration of creating a network stack using hierarchical statecharts.
+While I was able to get things to work, this project suffered from two things: inexperience and overengineering.
+I was new to software design with statecharts and I mistakenly started using Events in place of methods.
+This led to too many Events and complication due to trying to parse the Events' values into arguments.
+The statemachine design I came up with was also overblown.  I was trying to create a TDMA system at the time
+and that led to all sorts of special situations that I tried to solve with extra states.
+
+After switching gears to a CSMA system and attempting an implementation in C on a microcontroller,
+I designed a new, much simpler state machine.  From here on out, I will be workin on [phy_sx127x](https://www.github.com/dwhall/phy_sx127x)
+as the PHY layer for the HeyMac project on RasPi.
+
 # sx127x_ahsm
 
 A driver for the Semtech SX127X radio data modem
